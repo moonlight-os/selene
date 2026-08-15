@@ -1,0 +1,48 @@
+Source: selene
+Section: games
+Priority: optional
+Maintainer: Margot <mopigames2.0@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               qt6-base-dev,
+               qt6-declarative-dev,
+               libqt6svg6-dev,
+               qt6-base-dev-tools,
+               libsdl2-dev,
+               libsdl2-ttf-dev,
+               libavcodec-dev,
+               libavutil-dev,
+               libavformat-dev,
+               libswscale-dev,
+               libswresample-dev,
+               libopus-dev,
+               libssl-dev,
+               libva-dev,
+               libvdpau-dev,
+               libdrm-dev,
+               libplacebo-dev,
+               libgl-dev,
+               libegl-dev,
+               libx11-dev,
+               libwayland-dev,
+               wayland-protocols,
+               libxkbcommon-dev,
+               pkg-config
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: selene
+Architecture: amd64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         qml6-module-qtquick,
+         qml6-module-qtquick-controls,
+         qml6-module-qtquick-templates,
+         qml6-module-qtquick-layouts,
+         qml6-module-qtquick-window,
+         qml6-module-qtqml-workerscript,
+         libqt6svg6
+Description: Game streaming client for Moonlight OS
+ Selene is the client half of the Selene/Helios game streaming pair used by
+ Moonlight OS. It is a hard fork of moonlight-qt, built natively for Debian
+ rather than shipped as an AppImage, so it uses the system's Qt, SDL, FFmpeg
+ and VA-API libraries directly.

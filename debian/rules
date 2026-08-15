@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# The AppImage build passes disable-wayland and disable-libdrm. A Debian-native
+# build must NOT: the appliance is moving to a Wayland compositor, and dropping
+# libdrm would take the KMSDRM path with it.
+QMAKE_CONFIG = release
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	qmake6 PREFIX=/usr CONFIG+=$(QMAKE_CONFIG) $(CURDIR)/selene.pro
+
+override_dh_auto_test:
+	# no test suite
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -rf app/release app/debug moonlight-common-c/release qmdnsengine/release \
+	       h264bitstream/release .qmake.stash .qmake.cache
