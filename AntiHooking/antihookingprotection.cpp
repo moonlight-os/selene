@@ -172,10 +172,10 @@ private:
         // 02 0000004e`496ff900 00007ffa`23f4dd75 d3d9!CSwapChain::PresentMain+0x3e13e
         // 03 0000004e`496ffab0 00007ffa`23f4dccd d3d9!CBaseDevice::PresentMain+0x9d
         // 04 0000004e`496ffb00 00007ff7`8e31016f d3d9!CBaseDevice::PresentEx+0xbd
-        // 05 0000004e`496ffb50 00007ff7`8e30df1e Moonlight!DXVA2Renderer::renderFrame+0x61f [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\dxva2.cpp @ 1035]
-        // 06 0000004e`496ffd50 00007ff7`8e30e46a Moonlight!Pacer::renderFrame+0x3e [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\pacer\pacer.cpp @ 265]
-        // 07 (Inline Function) --------`-------- Moonlight!Pacer::renderLastFrameAndUnlock+0x197 [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\pacer\pacer.cpp @ 156]
-        // 08 0000004e`496ffda0 00007ffa`14476978 Moonlight!Pacer::renderThread+0x1ca [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\pacer\pacer.cpp @ 88]
+        // 05 0000004e`496ffb50 00007ff7`8e30df1e Selene!DXVA2Renderer::renderFrame+0x61f [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\dxva2.cpp @ 1035]
+        // 06 0000004e`496ffd50 00007ff7`8e30e46a Selene!Pacer::renderFrame+0x3e [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\pacer\pacer.cpp @ 265]
+        // 07 (Inline Function) --------`-------- Selene!Pacer::renderLastFrameAndUnlock+0x197 [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\pacer\pacer.cpp @ 156]
+        // 08 0000004e`496ffda0 00007ffa`14476978 Selene!Pacer::renderThread+0x1ca [C:\moonlight-qt\app\streaming\video\ffmpeg-renderers\pacer\pacer.cpp @ 88]
         // 09 0000004e`496ffde0 00007ffa`14476ee2 SDL2!SDL_RunThread+0x38 [C:\Users\camer\SDL\src\thread\SDL_thread.c @ 276]
         // 0a 0000004e`496ffe10 00007ffa`2aae0e82 SDL2!RunThread+0x12 [C:\Users\camer\SDL\src\thread\windows\SDL_systhread.c @ 83]
         // 0b 0000004e`496ffe40 00007ffa`2d627bd4 ucrtbase!thread_start<unsigned int (__cdecl*)(void *),1>+0x42
@@ -213,17 +213,17 @@ private:
         // 00007ffa`be3b0b73 498b5630        mov     rdx,qword ptr [r14+30h] ds:00000000`00000030=????????????????
         //
         // bdcamvk64+0x10b73
-        // libplacebo_357!vk_sw_destroy+0x14f [D:\a\moonlight-deps\moonlight-deps\libplacebo\src\vulkan\swapchain.c @ 460]
-        // libplacebo_357!pl_swapchain_destroy+0x1a [D:\a\moonlight-deps\moonlight-deps\libplacebo\src\swapchain.c @ 30]
-        // Moonlight!PlVkRenderer::~PlVkRenderer+0x159 [D:\a\moonlight-qt\app\streaming\video\ffmpeg-renderers\plvk.cpp @ 140]
-        // Moonlight!PlVkRenderer::`scalar deleting destructor'+0x17
-        // Moonlight!FFmpegVideoDecoder::reset+0x203 [D:\a\moonlight-qt\app\streaming\video\ffmpeg.cpp @ 301]
-        // Moonlight!FFmpegVideoDecoder::~FFmpegVideoDecoder+0x22 [D:\a\moonlight-qt\app\streaming\video\ffmpeg.cpp @ 257]
-        // Moonlight!FFmpegVideoDecoder::`scalar deleting destructor'+0x17
-        // Moonlight!Session::getDecoderInfo+0x19a [D:\a\moonlight-qt\app\streaming\session.cpp @ 415]
-        // Moonlight!SystemProperties::querySdlVideoInfoInternal+0x134 [D:\a\moonlight-qt\app\backend\systemproperties.cpp @ 161]
-        // Moonlight!SystemProperties::querySdlVideoInfo+0x97 [D:\a\moonlight-qt\app\backend\systemproperties.cpp @ 123]
-        // Moonlight!SystemProperties::SystemProperties+0x4bf [D:\a\moonlight-qt\app\backend\systemproperties.cpp @ 75]
+        // libplacebo_357!vk_sw_destroy+0x14f [D:\a\selene-deps\selene-deps\libplacebo\src\vulkan\swapchain.c @ 460]
+        // libplacebo_357!pl_swapchain_destroy+0x1a [D:\a\selene-deps\selene-deps\libplacebo\src\swapchain.c @ 30]
+        // Selene!PlVkRenderer::~PlVkRenderer+0x159 [D:\a\moonlight-qt\app\streaming\video\ffmpeg-renderers\plvk.cpp @ 140]
+        // Selene!PlVkRenderer::`scalar deleting destructor'+0x17
+        // Selene!FFmpegVideoDecoder::reset+0x203 [D:\a\moonlight-qt\app\streaming\video\ffmpeg.cpp @ 301]
+        // Selene!FFmpegVideoDecoder::~FFmpegVideoDecoder+0x22 [D:\a\moonlight-qt\app\streaming\video\ffmpeg.cpp @ 257]
+        // Selene!FFmpegVideoDecoder::`scalar deleting destructor'+0x17
+        // Selene!Session::getDecoderInfo+0x19a [D:\a\moonlight-qt\app\streaming\session.cpp @ 415]
+        // Selene!SystemProperties::querySdlVideoInfoInternal+0x134 [D:\a\moonlight-qt\app\backend\systemproperties.cpp @ 161]
+        // Selene!SystemProperties::querySdlVideoInfo+0x97 [D:\a\moonlight-qt\app\backend\systemproperties.cpp @ 123]
+        // Selene!SystemProperties::SystemProperties+0x4bf [D:\a\moonlight-qt\app\backend\systemproperties.cpp @ 75]
         //
         // https://github.com/moonlight-stream/moonlight-qt/issues/1425
         // https://github.com/moonlight-stream/moonlight-qt/issues/1579

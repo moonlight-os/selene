@@ -1,7 +1,7 @@
 // This file contains hooks for several functions that allow
 // Qt and SDL to more or less share DRM master ownership.
 //
-// This technique requires Linux v5.8 or later, or for Moonlight
+// This technique requires Linux v5.8 or later, or for Selene
 // to run as root (with CAP_SYS_ADMIN). Prior to Linux v5.8,
 // DRM_IOCTL_DROP_MASTER required CAP_SYS_ADMIN, which prevents
 // our trick from working (without root, that is).

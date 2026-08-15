@@ -215,7 +215,7 @@ public:
         // The VideoToolbox decoder attaches pixel aspect ratio information to the CVPixelBuffer
         // which will rescale the video stream in accordance with the host display resolution
         // to preserve the original aspect ratio of the host desktop. This behavior currently
-        // differs from the behavior of all other Moonlight Qt renderers, so we will strip
+        // differs from the behavior of all other Selene Qt renderers, so we will strip
         // these attachments for consistent behavior.
         CVBufferRemoveAttachment(pixBuf, kCVImageBufferPixelAspectRatioKey);
 

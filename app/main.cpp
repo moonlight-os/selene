@@ -285,7 +285,7 @@ LONG WINAPI UnhandledExceptionHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     }
 
     WCHAR dmpFileName[MAX_PATH];
-    swprintf_s(dmpFileName, L"%ls\\Moonlight-%I64u.dmp",
+    swprintf_s(dmpFileName, L"%ls\\Selene-%I64u.dmp",
                (PWCHAR)QDir::toNativeSeparators(Path::getLogDir()).utf16(), QDateTime::currentSecsSinceEpoch());
     QString qDmpFileName = QString::fromUtf16((const char16_t*)dmpFileName);
     HANDLE dumpHandle = CreateFileW(dmpFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -428,9 +428,12 @@ int main(int argc, char *argv[])
     // Set these here to allow us to use the default QSettings constructor.
     // These also ensure that our cache directory is named correctly. As such,
     // it is critical that these be called before Path::initialize().
-    QCoreApplication::setOrganizationName("Moonlight Game Streaming Project");
-    QCoreApplication::setOrganizationDomain("moonlight-stream.com");
-    QCoreApplication::setApplicationName("Moonlight");
+    // The organization name becomes a directory name, so keep it free of spaces:
+    // the appliance's shell tooling had to special-case the old
+    // "Moonlight Game Streaming Project" purely because of them.
+    QCoreApplication::setOrganizationName("moonlight-os");
+    QCoreApplication::setOrganizationDomain("moonlightos.dev");
+    QCoreApplication::setApplicationName("Selene");
 
     if (QFile(QDir::currentPath() + "/portable.dat").exists()) {
         QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -464,7 +467,7 @@ int main(int argc, char *argv[])
     if (IS_UNSPECIFIED_HANDLE(oldConErr))
 #endif
     {
-        s_LoggerFile = new QFile(tempDir.filePath(QString("Moonlight-%1.log").arg(QDateTime::currentSecsSinceEpoch())));
+        s_LoggerFile = new QFile(tempDir.filePath(QString("Selene-%1.log").arg(QDateTime::currentSecsSinceEpoch())));
         if (s_LoggerFile->open(QIODevice::WriteOnly | QIODevice::Text)) {
             QTextStream(stderr) << "Redirecting log output to " << s_LoggerFile->fileName() << Qt::endl;
             s_LoggerStream.setDevice(s_LoggerFile);
@@ -497,7 +500,7 @@ int main(int argc, char *argv[])
 
 #ifdef LOG_TO_FILE
     // Prune the oldest existing logs if there are more than 10
-    QStringList existingLogNames = tempDir.entryList(QStringList("Moonlight-*.log"), QDir::NoFilter, QDir::SortFlag::Time);
+    QStringList existingLogNames = tempDir.entryList(QStringList("Selene-*.log"), QDir::NoFilter, QDir::SortFlag::Time);
     for (int i = 10; i < existingLogNames.size(); i++) {
         qInfo() << "Removing old log file:" << existingLogNames.at(i);
         QFile(tempDir.filePath(existingLogNames.at(i))).remove();
@@ -551,7 +554,7 @@ int main(int argc, char *argv[])
 
             if (!QFile("/dev/dri").exists()) {
                 qWarning() << "Unable to find a KMSDRM display device!";
-                qWarning() << "On the Raspberry Pi, you must enable the 'fake KMS' driver in raspi-config to use Moonlight outside of the GUI environment.";
+                qWarning() << "On the Raspberry Pi, you must enable the 'fake KMS' driver in raspi-config to use Selene outside of the GUI environment.";
             }
             else if (!qEnvironmentVariableIsSet("QT_QPA_EGLFS_KMS_CONFIG")) {
                 // HACK: Remove this when Qt is fixed to properly check for display support before picking a card
@@ -618,13 +621,13 @@ int main(int argc, char *argv[])
     if (!qEnvironmentVariableIsSet("QT_OPENGL")) {
         // On Windows, use ANGLE so we don't have to load OpenGL
         // user-mode drivers into our app. OGL drivers (especially Intel)
-        // seem to crash Moonlight far more often than DirectX.
+        // seem to crash Selene far more often than DirectX.
         qputenv("QT_OPENGL", "angle");
     }
 #endif
 
 #if !defined(Q_OS_WIN32) || QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    // Moonlight requires the non-threaded renderer because we depend
+    // Selene requires the non-threaded renderer because we depend
     // on being able to control the render thread by blocking in the
     // main thread (and pumping events from the main thread when needed).
     // That doesn't work with the threaded renderer which causes all
@@ -696,7 +699,7 @@ int main(int argc, char *argv[])
     atexit(SDL_Quit);
 
     // Avoid the default behavior of changing the timer resolution to 1 ms.
-    // We don't want this all the time that Moonlight is open. We will set
+    // We don't want this all the time that Selene is open. We will set
     // it manually when we start streaming.
     SDL_SetHint(SDL_HINT_TIMER_RESOLUTION, "0");
 
@@ -705,7 +708,7 @@ int main(int argc, char *argv[])
 
     // SDL 2.0.12 changes the default behavior to use the button label rather than the button
     // position as most other software does. Set this back to 0 to stay consistent with prior
-    // releases of Moonlight.
+    // releases of Selene.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
 
     // Disable relative mouse scaling to renderer size or logical DPI. We want to send
@@ -715,8 +718,8 @@ int main(int argc, char *argv[])
     // Set our app name for SDL to use with PulseAudio and PipeWire. This matches what we
     // provide as our app name to libsoundio too. On SDL 2.0.18+, SDL_APP_NAME is also used
     // for screensaver inhibitor reporting.
-    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_APP_NAME, "Moonlight");
-    SDL_SetHint(SDL_HINT_APP_NAME, "Moonlight");
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_APP_NAME, "Selene");
+    SDL_SetHint(SDL_HINT_APP_NAME, "Selene");
 
     // SDL will try to lock the mouse cursor on Wayland if it's not visible in order to
     // support applications that assume they can warp the cursor (which isn't possible
@@ -922,13 +925,13 @@ int main(int argc, char *argv[])
 #ifndef Q_OS_DARWIN
     // Set the window icon except on macOS where we want to keep the
     // modified macOS 11 style rounded corner icon.
-    app.setWindowIcon(QIcon(":/res/moonlight.svg"));
+    app.setWindowIcon(QIcon(":/res/selene.svg"));
 #endif
 
     // This is necessary to show our icon correctly on Wayland
-    app.setDesktopFileName("com.moonlight_stream.Moonlight");
-    qputenv("SDL_VIDEO_WAYLAND_WMCLASS", "com.moonlight_stream.Moonlight");
-    qputenv("SDL_VIDEO_X11_WMCLASS", "com.moonlight_stream.Moonlight");
+    app.setDesktopFileName("dev.moonlightos.Selene");
+    qputenv("SDL_VIDEO_WAYLAND_WMCLASS", "dev.moonlightos.Selene");
+    qputenv("SDL_VIDEO_X11_WMCLASS", "dev.moonlightos.Selene");
 
     // Register our C++ types for QML
     qmlRegisterType<ComputerModel>("ComputerModel", 1, 0, "ComputerModel");

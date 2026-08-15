@@ -241,7 +241,7 @@ bool NvComputer::wake() const
     // Ports used as-is
     const quint16 STATIC_WOL_PORTS[] = {
         9, // Standard WOL port (privileged port)
-        47009, // Port opened by Moonlight Internet Hosting Tool for WoL (non-privileged port)
+        47009, // Port opened by Selene Internet Hosting Tool for WoL (non-privileged port)
     };
 
     // Ports offset by the HTTP base port for hosts using alternate ports

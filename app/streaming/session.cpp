@@ -972,7 +972,7 @@ void Session::emitLaunchWarning(QString text)
 bool Session::validateLaunch(SDL_Window* testWindow)
 {
     if (!m_Computer->isSupportedServerVersion) {
-        emit displayLaunchError(tr("The version of GeForce Experience on %1 is not supported by this build of Moonlight. You must update Moonlight to stream from %1.").arg(m_Computer->name));
+        emit displayLaunchError(tr("The version of GeForce Experience on %1 is not supported by this build of Selene. You must update Selene to stream from %1.").arg(m_Computer->name));
         return false;
     }
 
@@ -990,7 +990,7 @@ bool Session::validateLaunch(SDL_Window* testWindow)
                 emitLaunchWarning(tr("Your host software or GPU doesn't support encoding AV1."));
             }
 
-            // Moonlight-common-c will handle this case already, but we want
+            // Selene-common-c will handle this case already, but we want
             // to set this explicitly here so we can do our hardware acceleration
             // check below.
             m_SupportedVideoFormats.removeByMask(VIDEO_FORMAT_MASK_AV1);
@@ -1020,7 +1020,7 @@ bool Session::validateLaunch(SDL_Window* testWindow)
                 emitLaunchWarning(tr("Your host PC doesn't support encoding HEVC."));
             }
 
-            // Moonlight-common-c will handle this case already, but we want
+            // Selene-common-c will handle this case already, but we want
             // to set this explicitly here so we can do our hardware acceleration
             // check below.
             m_SupportedVideoFormats.removeByMask(VIDEO_FORMAT_MASK_H265);
@@ -1201,7 +1201,7 @@ bool Session::validateLaunch(SDL_Window* testWindow)
 
     // Check for unmapped gamepads
     if (!SdlInputHandler::getUnmappedGamepads().isEmpty()) {
-        emitLaunchWarning(tr("An attached gamepad has no mapping and won't be usable. Visit the Moonlight help to resolve this."));
+        emitLaunchWarning(tr("An attached gamepad has no mapping and won't be usable. Visit the Selene help to resolve this."));
     }
 
     // If we removed all codecs with the checks above, use H.264 as the codec of last resort.
@@ -1816,7 +1816,7 @@ void Session::exec()
     // We always want a resizable window with High DPI enabled
     Uint32 defaultWindowFlags = SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE;
 
-    // If we're starting in windowed mode and the Moonlight GUI is maximized or
+    // If we're starting in windowed mode and the Selene GUI is maximized or
     // minimized, match that with the streaming window.
     if (!m_IsFullScreen && m_QtWindow != nullptr) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
@@ -1843,7 +1843,7 @@ void Session::exec()
 #ifdef Q_OS_DARWIN
     std::string windowName = QString(m_Computer->name).toStdString();
 #else
-    std::string windowName = QString(m_Computer->name + " - Moonlight").toStdString();
+    std::string windowName = QString(m_Computer->name + " - Selene").toStdString();
 #endif
 
     m_Window = SDL_CreateWindow(windowName.c_str(),
@@ -1878,7 +1878,7 @@ void Session::exec()
 
     m_InputHandler->setWindow(m_Window);
 
-    QSvgRenderer svgIconRenderer(QString(":/res/moonlight.svg"));
+    QSvgRenderer svgIconRenderer(QString(":/res/selene.svg"));
     QImage svgImage(ICON_SIZE, ICON_SIZE, QImage::Format_RGBA8888);
     svgImage.fill(0);
 

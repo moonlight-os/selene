@@ -49,7 +49,7 @@ pushd $BUILD_FOLDER
 qmake6 $SOURCE_ROOT/moonlight-qt.pro CONFIG+=disable-wayland CONFIG+=disable-libdrm PREFIX=$DEPLOY_FOLDER/usr DEFINES+=APP_IMAGE || fail "Qmake failed!"
 popd
 
-echo Compiling Moonlight in $BUILD_CONFIG configuration
+echo Compiling Selene in $BUILD_CONFIG configuration
 pushd $BUILD_FOLDER
 make -j$(nproc) $(echo "$BUILD_CONFIG" | tr '[:upper:]' '[:lower:]') || fail "Make failed!"
 popd
