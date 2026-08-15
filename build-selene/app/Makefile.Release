@@ -1689,10 +1689,10 @@ uninstall_target: FORCE
 
 install_desktop: first FORCE
 	@test -d $(INSTALL_ROOT)/usr/local/share/applications/ || mkdir -p $(INSTALL_ROOT)/usr/local/share/applications/
-	$(QINSTALL) /home/mopi/moonlight-os-stuff/selene/app/deploy/linux/dev.moonlightos.Selene.desktop $(INSTALL_ROOT)/usr/local/share/applications/dev.moonlightos.Selene.desktop
+	$(QINSTALL) /home/mopi/moonlight-os-stuff/selene/app/deploy/linux/dev.mopigames.Selene.desktop $(INSTALL_ROOT)/usr/local/share/applications/dev.mopigames.Selene.desktop
 
 uninstall_desktop: FORCE
-	-$(DEL_FILE) -r $(INSTALL_ROOT)/usr/local/share/applications/dev.moonlightos.Selene.desktop
+	-$(DEL_FILE) -r $(INSTALL_ROOT)/usr/local/share/applications/dev.mopigames.Selene.desktop
 	-$(DEL_DIR) $(INSTALL_ROOT)/usr/local/share/applications/ 
 
 
@@ -1707,10 +1707,10 @@ uninstall_icons: FORCE
 
 install_appstream: first FORCE
 	@test -d $(INSTALL_ROOT)/usr/local/share/metainfo/ || mkdir -p $(INSTALL_ROOT)/usr/local/share/metainfo/
-	$(QINSTALL) /home/mopi/moonlight-os-stuff/selene/app/deploy/linux/dev.moonlightos.Selene.appdata.xml $(INSTALL_ROOT)/usr/local/share/metainfo/dev.moonlightos.Selene.appdata.xml
+	$(QINSTALL) /home/mopi/moonlight-os-stuff/selene/app/deploy/linux/dev.mopigames.Selene.appdata.xml $(INSTALL_ROOT)/usr/local/share/metainfo/dev.mopigames.Selene.appdata.xml
 
 uninstall_appstream: FORCE
-	-$(DEL_FILE) -r $(INSTALL_ROOT)/usr/local/share/metainfo/dev.moonlightos.Selene.appdata.xml
+	-$(DEL_FILE) -r $(INSTALL_ROOT)/usr/local/share/metainfo/dev.mopigames.Selene.appdata.xml
 	-$(DEL_DIR) $(INSTALL_ROOT)/usr/local/share/metainfo/ 
 
 

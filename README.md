@@ -24,7 +24,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
 ## Downloads
 - [Windows, macOS, and Steam Link](https://github.com/moonlight-stream/moonlight-qt/releases)
 - [Snap (for Ubuntu-based Linux distros)](https://snapcraft.io/selene)
-- [Flatpak (for other Linux distros)](https://flathub.org/apps/details/dev.moonlightos.Selene)
+- [Flatpak (for other Linux distros)](https://flathub.org/apps/details/dev.mopigames.Selene)
 - [AppImage](https://github.com/moonlight-stream/moonlight-qt/releases)
 - [Raspberry Pi 4 and 5](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-Raspberry-Pi-4)
 - [Generic ARM 32-bit and 64-bit Debian packages](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-ARM%E2%80%90based-Single-Board-Computers) (not for Raspberry Pi)

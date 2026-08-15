@@ -432,7 +432,7 @@ int main(int argc, char *argv[])
     // the appliance's shell tooling had to special-case the old
     // "Moonlight Game Streaming Project" purely because of them.
     QCoreApplication::setOrganizationName("moonlight-os");
-    QCoreApplication::setOrganizationDomain("moonlightos.dev");
+    QCoreApplication::setOrganizationDomain("mopigames.dev");
     QCoreApplication::setApplicationName("Selene");
 
     if (QFile(QDir::currentPath() + "/portable.dat").exists()) {
@@ -929,9 +929,9 @@ int main(int argc, char *argv[])
 #endif
 
     // This is necessary to show our icon correctly on Wayland
-    app.setDesktopFileName("dev.moonlightos.Selene");
-    qputenv("SDL_VIDEO_WAYLAND_WMCLASS", "dev.moonlightos.Selene");
-    qputenv("SDL_VIDEO_X11_WMCLASS", "dev.moonlightos.Selene");
+    app.setDesktopFileName("dev.mopigames.Selene");
+    qputenv("SDL_VIDEO_WAYLAND_WMCLASS", "dev.mopigames.Selene");
+    qputenv("SDL_VIDEO_X11_WMCLASS", "dev.mopigames.Selene");
 
     // Register our C++ types for QML
     qmlRegisterType<ComputerModel>("ComputerModel", 1, 0, "ComputerModel");

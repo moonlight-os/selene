@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Selene
-Comment=Stream games and other applications from another PC running Sunshine or GeForce Experience
-Exec=selene
-Icon=selene
-Terminal=false
-Type=Application
-Categories=Qt;Game;Network;RemoteAccess;
-Keywords=nvidia;gamestream;stream;sunshine;remote play;

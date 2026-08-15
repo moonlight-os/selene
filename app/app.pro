@@ -533,13 +533,13 @@ unix:!macx: {
 
     target.path = $$PREFIX/$$BINDIR/
 
-    desktop.files = deploy/linux/dev.moonlightos.Selene.desktop
+    desktop.files = deploy/linux/dev.mopigames.Selene.desktop
     desktop.path = $$PREFIX/$$DATADIR/applications/
 
     icons.files = res/selene.svg
     icons.path = $$PREFIX/$$DATADIR/icons/hicolor/scalable/apps/
 
-    appstream.files = deploy/linux/dev.moonlightos.Selene.appdata.xml
+    appstream.files = deploy/linux/dev.mopigames.Selene.appdata.xml
     appstream.path = $$PREFIX/$$DATADIR/metainfo/
 
     INSTALLS += target desktop icons appstream
