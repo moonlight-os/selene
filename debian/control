@@ -1,7 +1,7 @@
 Source: selene
 Section: games
 Priority: optional
-Maintainer: Margot <mopigames2.0@gmail.com>
+Maintainer: Margot Prego <mopigames@proton.me>
 Build-Depends: debhelper-compat (= 13),
                qt6-base-dev,
                qt6-declarative-dev,

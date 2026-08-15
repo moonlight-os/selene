@@ -3,4 +3,4 @@ selene (6.1.0-1) trixie; urgency=medium
   * Initial Debian packaging for Moonlight OS.
     Replaces the upstream AppImage with a native build.
 
- -- Margot <mopigames2.0@gmail.com>  Sat, 15 Aug 2026 22:15:00 +0000
+ -- Margot Prego <mopigames@proton.me>  Sat, 15 Aug 2026 22:15:00 +0000
