@@ -2141,6 +2141,7 @@ void Session::exec()
         if (!SDL_WaitEventTimeout(&event, 1000)) {
             presence.runCallbacks();
             pollLocalClipboard();
+            m_InputHandler->pollPanel();
             continue;
         }
 #else
@@ -2158,6 +2159,7 @@ void Session::exec()
 #endif
             presence.runCallbacks();
             pollLocalClipboard();
+            m_InputHandler->pollPanel();
             continue;
         }
 #endif

@@ -2,6 +2,7 @@
 
 #include "settings/streamingpreferences.h"
 #include "backend/computermanager.h"
+#include "streaming/panel/panelmenu.h"
 
 #include "SDL_compat.h"
 
@@ -130,6 +131,10 @@ public:
 
     void handleTouchFingerEvent(SDL_TouchFingerEvent* event);
 
+    // Drains helper replies into the panel. Cheap when it is closed, and
+    // called from the event loop rather than on a timer.
+    void pollPanel();
+
     int getAttachedGamepadMask();
 
     void raiseAllKeys();
@@ -249,6 +254,10 @@ private:
     SDL_TimerID m_DragTimer;
     char m_DragButton;
     int m_NumFingersDown;
+
+    // The in-client settings panel, or null on a build without one. Owned
+    // here because this is what sees the key that opens it.
+    PanelMenu* m_Panel;
 
     static const int k_ButtonMap[];
 };

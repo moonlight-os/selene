@@ -1,0 +1,96 @@
+#pragma once
+
+#include <QJsonObject>
+#include <QString>
+#include <QPoint>
+#include <QStringList>
+
+#include "SDL_compat.h"
+#include "panelpainter.h"
+
+class HelperClient;
+
+// The Moonlight OS settings panel, drawn over the stream by Selene itself.
+//
+// It replaces an external terminal running whiptail, and the reason that had
+// to go is not tidiness: a foreign window cannot reliably be composited over a
+// fullscreen client, so the old panel needed a workspace of its own, a lock
+// file, stale-lock recovery, and a focus and cursor hand-off on the way back.
+// A panel drawn into the client's own surface needs none of those, because
+// there is no second window to place, raise or focus.
+//
+// It is text, rendered through the same overlay path as the stats overlay --
+// which already wraps multi-line UTF-8 -- so no new rendering machinery
+// exists. That also means it works under every video renderer rather than
+// only the ones we remembered to teach.
+class PanelMenu
+{
+public:
+    PanelMenu();
+    ~PanelMenu();
+
+    bool isOpen() const { return m_Open; }
+
+    // False when there is nothing to open -- no helper, so no appliance to
+    // configure. The caller should then leave the key alone rather than
+    // showing an empty panel.
+    bool open();
+    void close();
+
+    // Returns true when the key was the panel's. While open it takes every
+    // key, so a menu keystroke cannot also reach the host -- arrowing through
+    // Wi-Fi networks must not walk a game's inventory at the same time.
+    bool handleKey(const SDL_KeyboardEvent* event);
+
+    // Mouse and touch. Returns true when the event was the panel's, so it
+    // never also reaches the host -- clicking a menu row must not shoot.
+    bool handleMouseMotion(int x, int y);
+    bool handleMouseButton(const SDL_MouseButtonEvent* event);
+
+    // The window, so the panel can work out where it is drawn. It is centred
+    // by the renderers, and a click has to be tested against the same centre
+    // or the mouse lands somewhere the panel is not.
+    void setWindow(SDL_Window* window) { m_Window = window; }
+
+    // The stream's resolution. The panel is drawn into the video frame and
+    // scaled with it, so turning a pointer position into a row means undoing
+    // that scaling -- which needs the frame size, not just the window's.
+    void setStreamSize(int width, int height) { m_StreamWidth = width; m_StreamHeight = height; }
+
+    // Drains helper replies and refreshes the drawn text. Called from the SDL
+    // loop, and cheap when nothing has changed.
+    void poll();
+
+private:
+    enum class Screen {
+        Main,
+        Status,
+        Networks,
+    };
+
+    void redraw();
+    void activateSelection();
+    void applyReply(const QJsonObject& reply);
+    QStringList currentItems() const;
+
+    PanelPainter m_Painter;
+    HelperClient* m_Helper;
+    bool m_Open;
+    Screen m_Screen;
+    int m_Selected;
+
+    // What the helper last told us, kept as text ready to draw.
+    QStringList m_StatusLines;
+    QStringList m_Networks;
+    QString m_Message;
+
+    int m_PendingRequest;
+    int m_Hovered;
+    SDL_Window* m_Window;
+    int m_StreamWidth;
+    int m_StreamHeight;
+
+    // Screen coordinates to panel-image coordinates, undoing the letterbox
+    // and the scale the video was drawn with.
+    QPoint mapToPanel(int x, int y) const;
+};

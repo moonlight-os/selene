@@ -33,7 +33,8 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
       m_RightButtonReleaseTimer(0),
       m_DragTimer(0),
       m_DragButton(0),
-      m_NumFingersDown(0)
+      m_NumFingersDown(0),
+      m_Panel(new PanelMenu())
 {
     // System keys are always captured when running without a DE
     if (!WMUtils::isRunningDesktopEnvironment()) {
@@ -218,6 +219,8 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
 
 SdlInputHandler::~SdlInputHandler()
 {
+    delete m_Panel;
+
     for (int i = 0; i < MAX_GAMEPADS; i++) {
         if (m_GamepadState[i].mouseEmulationTimer != 0) {
             Session::get()->notifyMouseEmulationMode(false);
@@ -265,9 +268,23 @@ SdlInputHandler::~SdlInputHandler()
 #endif
 }
 
+void SdlInputHandler::pollPanel()
+{
+    if (m_Panel != nullptr) {
+        m_Panel->poll();
+    }
+}
+
 void SdlInputHandler::setWindow(SDL_Window *window)
 {
     m_Window = window;
+
+    // The panel needs it to work out where it is drawn: the renderers centre
+    // it, and a click is tested against that same centre.
+    if (m_Panel != nullptr) {
+        m_Panel->setWindow(window);
+        m_Panel->setStreamSize(m_StreamWidth, m_StreamHeight);
+    }
 }
 
 void SdlInputHandler::raiseAllKeys()

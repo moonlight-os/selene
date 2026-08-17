@@ -192,6 +192,9 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/clipboard.cpp \
+    streaming/panel/helperclient.cpp \
+    streaming/panel/panelmenu.cpp \
+    streaming/panel/panelpainter.cpp \
     streaming/session.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
@@ -230,6 +233,9 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/clipboard.h \
+    streaming/panel/helperclient.h \
+    streaming/panel/panelmenu.h \
+    streaming/panel/panelpainter.h \
     streaming/session.h \
     streaming/audio/renderers/renderer.h \
     streaming/audio/renderers/sdl.h \

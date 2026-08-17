@@ -213,8 +213,17 @@ void EGLRenderer::renderOverlay(Overlay::OverlayType type, int viewportWidth, in
             // Top left
             overlayRect.x = 0;
             overlayRect.y = viewportHeight - newSurface->h;
-        } else {
-            SDL_assert(false);
+        }
+        else {
+            // The settings panel, centred. Centring is symmetric, so the
+            // lower-left origin makes no difference here.
+            //
+            // This branch used to be SDL_assert(false), which compiles out in
+            // release and left the rect uninitialised -- so a new overlay type
+            // was drawn at whatever happened to be on the stack. Any future
+            // type now gets a sane position rather than a random one.
+            overlayRect.x = (viewportWidth - newSurface->w) / 2;
+            overlayRect.y = (viewportHeight - newSurface->h) / 2;
         }
 
         overlayRect.w = newSurface->w;

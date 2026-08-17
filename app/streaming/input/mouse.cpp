@@ -6,6 +6,10 @@
 
 void SdlInputHandler::handleMouseButtonEvent(SDL_MouseButtonEvent* event)
 {
+    if (m_Panel != nullptr && m_Panel->handleMouseButton(event)) {
+        return;
+    }
+
     int button;
 
     if (event->which == SDL_TOUCH_MOUSEID) {
@@ -70,6 +74,12 @@ void SdlInputHandler::handleMouseButtonEvent(SDL_MouseButtonEvent* event)
 
 void SdlInputHandler::handleMouseMotionEvent(SDL_MouseMotionEvent* event)
 {
+    // The panel takes the pointer while it is open, so hovering a menu row
+    // cannot also aim in the game behind it.
+    if (m_Panel != nullptr && m_Panel->handleMouseMotion(event->x, event->y)) {
+        return;
+    }
+
     if (!isCaptureActive()) {
         // Not capturing
         return;
