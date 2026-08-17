@@ -194,6 +194,7 @@ SOURCES += \
     streaming/clipboard.cpp \
     streaming/panel/helperclient.cpp \
     streaming/panel/panelmenu.cpp \
+    streaming/panel/panelmodel.cpp \
     streaming/panel/panelpainter.cpp \
     streaming/session.cpp \
     streaming/audio/audio.cpp \
@@ -235,6 +236,7 @@ HEADERS += \
     streaming/clipboard.h \
     streaming/panel/helperclient.h \
     streaming/panel/panelmenu.h \
+    streaming/panel/panelmodel.h \
     streaming/panel/panelpainter.h \
     streaming/session.h \
     streaming/audio/renderers/renderer.h \

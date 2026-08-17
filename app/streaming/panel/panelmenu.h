@@ -6,9 +6,9 @@
 #include <QStringList>
 
 #include "SDL_compat.h"
+#include "panelmodel.h"
 #include "panelpainter.h"
 
-class HelperClient;
 
 // The Moonlight OS settings panel, drawn over the stream by Selene itself.
 //
@@ -72,40 +72,16 @@ public:
     void poll();
 
 private:
-    enum class Screen {
-        Main,
-        Status,
-        Networks,
-        Password,
-    };
-
     void redraw();
-    void activateSelection();
-    void applyReply(const QJsonObject& reply);
-    QStringList currentItems() const;
 
+    // The behaviour lives in the model, shared with the standalone window.
+    // This class is only the SDL half: overlay surface out, SDL events in.
+    PanelModel m_Model;
     PanelPainter m_Painter;
-    HelperClient* m_Helper;
     bool m_Open;
-    Screen m_Screen;
-    int m_Selected;
-
-    // What the helper last told us, kept as text ready to draw.
-    QStringList m_StatusLines;
-    QStringList m_Networks;
-    QString m_Message;
-
-    int m_PendingRequest;
-
-    // The network being joined, and what has been typed for it so far.
-    QString m_PendingSsid;
-    QString m_Password;
-    int m_Hovered;
     SDL_Window* m_Window;
     int m_StreamWidth;
     int m_StreamHeight;
 
-    // Screen coordinates to panel-image coordinates, undoing the letterbox
-    // and the scale the video was drawn with.
     QPoint mapToPanel(int x, int y) const;
 };
