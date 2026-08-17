@@ -5,6 +5,6 @@
 # that the output has a transparent background.
 
 convert -density 256 -background none -define icon:auto-resize ../app/res/selene.svg ../app/selene.ico
-convert -density 256 -background none -size 64x64 ../app/res/selene.svg ../app/moonlight_wix.png
+convert -density 256 -background none -size 64x64 ../app/res/selene.svg ../app/selene_wix.png
 
 echo IMPORTANT: Validate the icon has a transparent background before committing!
