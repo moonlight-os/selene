@@ -221,6 +221,23 @@ private:
     void clSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b);
 
     static
+    void clClipboardOffer(uint32_t seq, const uint16_t* formats, const uint32_t* sizeHints, uint16_t formatCount);
+
+    static
+    void clClipboardRequest(uint32_t seq, uint16_t format);
+
+    static
+    void clClipboardData(uint32_t seq, uint16_t format, const void* data, uint32_t length);
+
+    // SDL2 has no clipboard-change event, so a local copy can only be noticed
+    // by looking. Rate limited internally; safe to call from the event loop as
+    // often as it turns.
+    void pollLocalClipboard();
+
+    // Sent once per session, if the host advertised the feature.
+    void sendKeyboardLayout();
+
+    static
     void clSetAdaptiveTriggers(uint16_t controllerNumber, uint8_t eventFlags, uint8_t typeLeft, uint8_t typeRight, uint8_t *left, uint8_t *right);
 
     static
@@ -283,6 +300,12 @@ private:
     Overlay::OverlayManager m_OverlayManager;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
+    // What the clipboard held the last time we looked, so a poll can tell a
+    // new local copy from the text we just accepted from the host.
+    QString m_LastClipboardText;
+    uint32_t m_LastClipboardPollTicks = 0;
+    uint32_t m_ClipboardSeq = 0;
+
     static Session* s_ActiveSession;
     static QSemaphore s_ActiveSessionSemaphore;
 };
