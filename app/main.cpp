@@ -40,6 +40,9 @@
 #endif
 
 #include "cli/listapps.h"
+#ifdef HAS_PANEL
+#include "streaming/panel/panelwindow.h"
+#endif
 #include "cli/quitstream.h"
 #include "cli/startstream.h"
 #include "cli/pair.h"
@@ -1031,6 +1034,30 @@ int main(int argc, char *argv[])
             auto launcher = new CliListApps::Launcher(listParser.getHost(), listParser, &app);
             launcher->execute(new ComputerManager(StreamingPreferences::get()));
             hasGUI = false;
+            break;
+        }
+    case GlobalCommandLineParser::PanelRequested:
+        {
+#ifdef HAS_PANEL
+            // The appliance settings panel, as a window rather than as an
+            // overlay. The QML engine is not involved: this is the same
+            // PanelModel and PanelPainter the in-stream panel uses, so there
+            // is one interface instead of two that drift apart.
+            auto panel = new PanelWindow();
+            if (!panel->isAvailable()) {
+                // No helper means this is not a Moonlight OS appliance, and
+                // a window that can do nothing is worse than a clear refusal.
+                fprintf(stderr, "No Moonlight OS helper is running, so there is no panel to show.\n");
+                delete panel;
+                return 1;
+            }
+
+            panel->showFullScreen();
+            hasGUI = false;
+#else
+            fprintf(stderr, "This build has no settings panel.\n");
+            return 1;
+#endif
             break;
         }
     }

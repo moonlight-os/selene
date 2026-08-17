@@ -192,6 +192,10 @@ GlobalCommandLineParser::ParseResult GlobalCommandLineParser::parse(const QStrin
                 return PairRequested;
             } else if (action == "list") {
                 return ListRequested;
+            } else if (action == "panel") {
+                // The appliance settings panel as a window, for when there is
+                // no stream to draw it over. Same panel either way.
+                return PanelRequested;
             }
         }
 

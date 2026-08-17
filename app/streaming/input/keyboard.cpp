@@ -193,6 +193,7 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
     // have it in their fingers. The compositor used to bind it and launch an
     // external terminal; with the panel inside the client, sway must stop
     // binding it so the key arrives here instead.
+#ifdef HAS_PANEL
     if (m_Panel != nullptr) {
         if (m_Panel->isOpen()) {
             bool handled = m_Panel->handleKey(event);
@@ -246,6 +247,8 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
         }
     }
 
+
+#endif
 
     if (event->repeat) {
         // Ignore repeat key down events

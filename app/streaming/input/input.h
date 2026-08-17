@@ -2,7 +2,9 @@
 
 #include "settings/streamingpreferences.h"
 #include "backend/computermanager.h"
+#ifdef HAS_PANEL
 #include "streaming/panel/panelmenu.h"
+#endif
 
 #include "SDL_compat.h"
 
@@ -258,9 +260,11 @@ private:
     char m_DragButton;
     int m_NumFingersDown;
 
-    // The in-client settings panel, or null on a build without one. Owned
-    // here because this is what sees the key that opens it.
+#ifdef HAS_PANEL
+    // The in-client settings panel. Absent on platforms with no appliance to
+    // configure, which is every platform that is not Moonlight OS.
     PanelMenu* m_Panel;
+#endif
 
     static const int k_ButtonMap[];
 };

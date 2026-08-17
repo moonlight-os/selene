@@ -192,10 +192,6 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/clipboard.cpp \
-    streaming/panel/helperclient.cpp \
-    streaming/panel/panelmenu.cpp \
-    streaming/panel/panelmodel.cpp \
-    streaming/panel/panelpainter.cpp \
     streaming/session.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
@@ -234,10 +230,6 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/clipboard.h \
-    streaming/panel/helperclient.h \
-    streaming/panel/panelmenu.h \
-    streaming/panel/panelmodel.h \
-    streaming/panel/panelpainter.h \
     streaming/session.h \
     streaming/audio/renderers/renderer.h \
     streaming/audio/renderers/sdl.h \
@@ -590,3 +582,24 @@ macx {
 
 VERSION = "$$cat(version.txt)"
 DEFINES += VERSION_STR=\\\"$$cat(version.txt)\\\"
+
+# The Moonlight OS settings panel talks to a privileged helper over a unix
+# socket and asks a Wayland compositor for a hotkey. Neither exists on
+# Windows, and building it there means porting an appliance feature to a
+# platform that has no appliance. HAS_PANEL is what the rest of the code
+# tests, so a build without it simply has no panel rather than a stubbed one.
+unix {
+    DEFINES += HAS_PANEL
+
+    SOURCES += streaming/panel/helperclient.cpp \
+               streaming/panel/panelmenu.cpp \
+               streaming/panel/panelmodel.cpp \
+               streaming/panel/panelpainter.cpp \
+               streaming/panel/panelwindow.cpp
+
+    HEADERS += streaming/panel/helperclient.h \
+               streaming/panel/panelmenu.h \
+               streaming/panel/panelmodel.h \
+               streaming/panel/panelpainter.h \
+               streaming/panel/panelwindow.h
+}

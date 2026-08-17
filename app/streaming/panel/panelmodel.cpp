@@ -292,11 +292,12 @@ void PanelModel::applyReply(const QJsonObject& reply)
     }
 
     if (result.contains("hostname")) {
-        m_StatusLines = {
-            QStringLiteral("Name     %1").arg(result.value("hostname").toString()),
-            QStringLiteral("Address  %1").arg(result.value("address").toString(QStringLiteral("none"))),
-            QStringLiteral("Wi-Fi    %1").arg(result.value("wifi").toString(QStringLiteral("not connected"))),
-        };
+        // Built by appending rather than from a braced list: the Steam Link
+        // toolchain cannot decide which QStringList assignment that means.
+        m_StatusLines.clear();
+        m_StatusLines.append(QStringLiteral("Name     %1").arg(result.value("hostname").toString()));
+        m_StatusLines.append(QStringLiteral("Address  %1").arg(result.value("address").toString(QStringLiteral("none"))));
+        m_StatusLines.append(QStringLiteral("Wi-Fi    %1").arg(result.value("wifi").toString(QStringLiteral("not connected"))));
     }
 }
 

@@ -6,6 +6,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -61,11 +62,20 @@ HelperClient::~HelperClient()
 
 bool HelperClient::connectToHelper()
 {
-    // SOCK_CLOEXEC because this process spawns wl-copy, which forks and stays
+    // Close-on-exec because this process spawns wl-copy, which forks and stays
     // alive to serve the selection -- an inherited descriptor would be held
     // for as long as the clipboard lives. The same mistake with a listening
     // socket is what once kept Helios from restarting.
+    //
+    // SOCK_CLOEXEC is Linux; macOS has no such flag and needs the fcntl.
+#ifdef SOCK_CLOEXEC
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd >= 0) {
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
+    }
+#endif
     if (fd < 0) {
         return false;
     }
