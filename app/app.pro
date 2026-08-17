@@ -447,6 +447,15 @@ wayland {
     DEFINES += HAS_WAYLAND
     SOURCES += streaming/video/ffmpeg-renderers/pacer/waylandvsyncsource.cpp
     HEADERS += streaming/video/ffmpeg-renderers/pacer/waylandvsyncsource.h
+
+    # Multi-finger touchpad gestures. The generated protocol code is checked
+    # in rather than produced by wayland-scanner at build time, so building
+    # needs no wayland-protocols and no scanner -- only libwayland-client,
+    # which is already required above.
+    SOURCES += streaming/input/waylandgestures.cpp \
+               wayland/pointer-gestures-unstable-v1-protocol.c
+    HEADERS += streaming/input/waylandgestures.h \
+               wayland/pointer-gestures-unstable-v1-client-protocol.h
 }
 
 RESOURCES += \

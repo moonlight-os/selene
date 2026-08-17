@@ -268,6 +268,32 @@ SdlInputHandler::~SdlInputHandler()
 void SdlInputHandler::setWindow(SDL_Window *window)
 {
     m_Window = window;
+
+#ifdef HAS_WAYLAND
+    // A touchpad reaches us as pointer motion and scroll and nothing else:
+    // libinput consumes its touches, and SDL's Wayland backend does not bind
+    // the gesture protocol, so no amount of raising MAX_FINGERS would make
+    // three or four fingers visible here. Binding it ourselves is the only
+    // way this client sees them at all.
+    //
+    // Failure is silent and expected on X11, on KMSDRM, and on a compositor
+    // without the protocol -- streaming is unaffected either way.
+    if (m_WaylandGestures.initialize(window)) {
+        m_WaylandGestures.onSwipe = [](uint32_t fingers, double dx, double dy) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Touchpad swipe: %u fingers, dx=%.1f dy=%.1f",
+                        fingers, dx, dy);
+        };
+        m_WaylandGestures.onPinch = [](uint32_t fingers, double scale, double rotation) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Touchpad pinch: %u fingers, scale=%.2f rotation=%.1f",
+                        fingers, scale, rotation);
+        };
+
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Multi-finger touchpad gestures are available");
+    }
+#endif
 }
 
 void SdlInputHandler::raiseAllKeys()

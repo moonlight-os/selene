@@ -2,6 +2,7 @@
 
 #include "settings/streamingpreferences.h"
 #include "backend/computermanager.h"
+#include "waylandgestures.h"
 
 #include "SDL_compat.h"
 
@@ -249,6 +250,12 @@ private:
     SDL_TimerID m_DragTimer;
     char m_DragButton;
     int m_NumFingersDown;
+
+#ifdef HAS_WAYLAND
+    // Touchpad gestures, which arrive from the compositor rather than from
+    // SDL and so are counted separately from m_NumFingersDown above.
+    WaylandGestures m_WaylandGestures;
+#endif
 
     static const int k_ButtonMap[];
 };
