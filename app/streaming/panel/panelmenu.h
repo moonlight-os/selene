@@ -31,6 +31,11 @@ public:
 
     bool isOpen() const { return m_Open; }
 
+    // Ask the appliance to hand Ctrl+Alt+M over for the duration of a stream,
+    // and to take it back afterwards. No-ops anywhere there is no appliance.
+    void claimHotkey();
+    void releaseHotkey();
+
     // False when there is nothing to open -- no helper, so no appliance to
     // configure. The caller should then leave the key alone rather than
     // showing an empty panel.

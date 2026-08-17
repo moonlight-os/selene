@@ -219,6 +219,11 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
 
 SdlInputHandler::~SdlInputHandler()
 {
+    if (m_Panel != nullptr) {
+        // Hand the key back before going away, or the appliance is left with
+        // no way to open a panel at all.
+        m_Panel->releaseHotkey();
+    }
     delete m_Panel;
 
     for (int i = 0; i < MAX_GAMEPADS; i++) {
@@ -284,6 +289,9 @@ void SdlInputHandler::setWindow(SDL_Window *window)
     if (m_Panel != nullptr) {
         m_Panel->setWindow(window);
         m_Panel->setStreamSize(m_StreamWidth, m_StreamHeight);
+
+        // The window exists, so the stream is starting: take the key.
+        m_Panel->claimHotkey();
     }
 }
 

@@ -7,6 +7,9 @@
 
 #include <QJsonArray>
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 PanelMenu::PanelMenu()
     : m_Helper(new HelperClient()),
       m_Open(false),
@@ -52,6 +55,63 @@ QPoint PanelMenu::mapToPanel(int x, int y) const
     QPoint mapped((int)((x - originX) / scale), (int)((y - originY) / scale));
 
     return mapped;
+}
+
+namespace
+{
+// Run a short appliance command, inheriting none of our descriptors.
+//
+// The descriptor part is not politeness: this process has already been bitten
+// once by a forked child holding a socket open for the lifetime of a
+// clipboard selection.
+void runApplianceCommand(const char* const argv[])
+{
+    pid_t pid = fork();
+    if (pid < 0) {
+        return;
+    }
+
+    if (pid == 0) {
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 34))
+        closefrom(STDERR_FILENO + 1);
+#else
+        long maxFd = sysconf(_SC_OPEN_MAX);
+        for (int fd = STDERR_FILENO + 1; fd < (int)maxFd; fd++) {
+            close(fd);
+        }
+#endif
+        execvp(argv[0], (char* const*)argv);
+        _exit(127);
+    }
+
+    int status;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+    }
+}
+} // namespace
+
+// While a stream runs, the key has to reach this client: the panel is drawn
+// into our own surface, and sway holding the binding means we never see it.
+void PanelMenu::claimHotkey()
+{
+    if (!m_Helper->isAvailable()) {
+        return;
+    }
+
+    const char* const argv[] = { "moonlight-hotkey", "release", nullptr };
+    runApplianceCommand(argv);
+}
+
+// And afterwards it has to go back, or there is no way to open a panel at the
+// launcher -- which is exactly where someone sets up Wi-Fi for the first time.
+void PanelMenu::releaseHotkey()
+{
+    if (!m_Helper->isAvailable()) {
+        return;
+    }
+
+    const char* const argv[] = { "moonlight-hotkey", "grab", nullptr };
+    runApplianceCommand(argv);
 }
 
 PanelMenu::~PanelMenu()
