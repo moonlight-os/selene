@@ -28,6 +28,8 @@
 #define SDL_CODE_GAMECONTROLLER_SET_MOTION_EVENT_STATE 103
 #define SDL_CODE_GAMECONTROLLER_SET_CONTROLLER_LED 104
 #define SDL_CODE_GAMECONTROLLER_SET_ADAPTIVE_TRIGGERS 105
+#define SDL_CODE_CLIPBOARD_REQUESTED 106
+#define SDL_CODE_CLIPBOARD_RECEIVED 107
 
 #include <openssl/rand.h>
 
@@ -60,7 +62,10 @@ CONNECTION_LISTENER_CALLBACKS Session::k_ConnCallbacks = {
     Session::clRumbleTriggers,
     Session::clSetMotionEventState,
     Session::clSetControllerLED,
-    Session::clSetAdaptiveTriggers
+    Session::clSetAdaptiveTriggers,
+    Session::clClipboardOffer,
+    Session::clClipboardRequest,
+    Session::clClipboardData
 };
 
 Session* Session::s_ActiveSession;
@@ -249,6 +254,127 @@ void Session::clSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g
     setControllerLEDEvent.user.data1 = (void*)(uintptr_t)controllerNumber;
     setControllerLEDEvent.user.data2 = (void*)(uintptr_t)(r << 16 | g << 8 | b);
     SDL_PushEvent(&setControllerLEDEvent);
+}
+
+// Clipboard.
+//
+// All three of these run on the control stream's receive thread, so none of
+// them may touch SDL's clipboard: that belongs to the thread running the SDL
+// event loop, which is the one blocked inside exec(). Anything needing it is
+// pushed across as an SDL event, exactly as the gamepad callbacks do.
+//
+// The host offered us something. Ask for it straight away rather than waiting
+// for a real paste: SDL has no way to own a selection lazily and answer later,
+// so the client cannot advertise without holding the bytes. The laziness that
+// protects privacy is still intact in the direction that matters -- this
+// client sends nothing until the host asks.
+void Session::clClipboardOffer(uint32_t seq, const uint16_t* formats, const uint32_t*, uint16_t formatCount)
+{
+    for (uint16_t i = 0; i < formatCount; i++) {
+        if (formats[i] == ML_CLIPBOARD_FORMAT_TEXT_UTF8) {
+            LiSendClipboardRequest(seq, ML_CLIPBOARD_FORMAT_TEXT_UTF8);
+            return;
+        }
+    }
+}
+
+// The host wants what we offered. Reading the clipboard is SDL's business, so
+// bounce to the SDL thread and answer from there.
+void Session::clClipboardRequest(uint32_t seq, uint16_t format)
+{
+    if (format != ML_CLIPBOARD_FORMAT_TEXT_UTF8) {
+        return;
+    }
+
+    SDL_Event event = {};
+    event.type = SDL_USEREVENT;
+    event.user.code = SDL_CODE_CLIPBOARD_REQUESTED;
+    event.user.data1 = (void*)(uintptr_t)seq;
+    SDL_PushEvent(&event);
+}
+
+// The host answered a request. The payload is only valid for this call, so it
+// is copied here and freed by the handler on the other side.
+void Session::clClipboardData(uint32_t, uint16_t format, const void* data, uint32_t length)
+{
+    if (format != ML_CLIPBOARD_FORMAT_TEXT_UTF8 || length == 0) {
+        return;
+    }
+
+    // NUL terminated because SDL_SetClipboardText takes a C string, and
+    // nothing guarantees the sender included one.
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "Clipboard data received from host: %u bytes", length);
+
+    char* copy = (char*)malloc(length + 1);
+    if (copy == nullptr) {
+        return;
+    }
+    memcpy(copy, data, length);
+    copy[length] = '\0';
+
+    SDL_Event event = {};
+    event.type = SDL_USEREVENT;
+    event.user.code = SDL_CODE_CLIPBOARD_RECEIVED;
+    event.user.data1 = copy;
+    if (SDL_PushEvent(&event) <= 0) {
+        // The queue refused it, so nothing downstream will ever free this.
+        free(copy);
+    }
+}
+
+
+// Notice a local copy and tell the host about it -- without sending anything.
+//
+// SDL2 has no clipboard-change event (SDL3 has SDL_EVENT_CLIPBOARD_UPDATE), so
+// this is a poll, and it is deliberately a slow one: a clipboard is not
+// latency sensitive, and reading it on a Wayland session is a round trip to
+// the compositor rather than a memory read.
+void Session::pollLocalClipboard()
+{
+    // Nothing to negotiate with. Checked every time rather than cached because
+    // the answer only settles once the host has advertised.
+    if (!LiGetPeerFeatureVersion(ML_FEATURE_CLIPBOARD)) {
+        return;
+    }
+
+    uint32_t now = SDL_GetTicks();
+    if (now - m_LastClipboardPollTicks < 500) {
+        return;
+    }
+    m_LastClipboardPollTicks = now;
+
+    if (!SDL_HasClipboardText()) {
+        return;
+    }
+
+    char* text = SDL_GetClipboardText();
+    if (text == nullptr) {
+        return;
+    }
+
+    QString current = QString::fromUtf8(text);
+    size_t length = strlen(text);
+    SDL_free(text);
+
+    // Unchanged, empty, or the very text the host just sent us. The last of
+    // those is the one that matters: offering it back would have the host ask
+    // for it, set it, and offer it to us again, forever.
+    if (current.isEmpty() || current == m_LastClipboardText) {
+        return;
+    }
+
+    m_LastClipboardText = current;
+
+    if (length > ML_CLIPBOARD_MAX_BYTES) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Not offering a %zu byte clipboard", length);
+        return;
+    }
+
+    uint16_t format = ML_CLIPBOARD_FORMAT_TEXT_UTF8;
+    uint32_t sizeHint = (uint32_t)length;
+    LiSendClipboardOffer(++m_ClipboardSeq, &format, &sizeHint, 1);
 }
 
 void Session::clSetAdaptiveTriggers(uint16_t controllerNumber, uint8_t eventFlags, uint8_t typeLeft, uint8_t typeRight, uint8_t *left, uint8_t *right){
@@ -1976,6 +2102,7 @@ void Session::exec()
         // and other problems.
         if (!SDL_WaitEventTimeout(&event, 1000)) {
             presence.runCallbacks();
+            pollLocalClipboard();
             continue;
         }
 #else
@@ -1992,6 +2119,7 @@ void Session::exec()
             SDL_Delay(10);
 #endif
             presence.runCallbacks();
+            pollLocalClipboard();
             continue;
         }
 #endif
@@ -2036,6 +2164,40 @@ void Session::exec()
                 m_InputHandler->setAdaptiveTriggers((uint16_t)(uintptr_t)event.user.data1,
                                                     (DualSenseOutputReport *)event.user.data2);
                 break;
+            case SDL_CODE_CLIPBOARD_REQUESTED: {
+                // The host is pasting. Answer with what we have now rather
+                // than with whatever we held when the offer was made -- if
+                // they differ, the newer text is the one the user means.
+                char* text = SDL_GetClipboardText();
+                if (text != nullptr) {
+                    size_t length = strlen(text);
+                    if (length > 0 && length <= ML_CLIPBOARD_MAX_BYTES) {
+                        LiSendClipboardData((uint32_t)(uintptr_t)event.user.data1,
+                                            ML_CLIPBOARD_FORMAT_TEXT_UTF8,
+                                            text, (uint32_t)length);
+                    }
+                    SDL_free(text);
+                }
+                break;
+            }
+            case SDL_CODE_CLIPBOARD_RECEIVED: {
+                char* text = (char*)event.user.data1;
+
+                // Remember what we are about to set, so the poll below does
+                // not see the host's own text as a fresh local copy and offer
+                // it straight back -- which is how a clipboard loop starts.
+                m_LastClipboardText = QString::fromUtf8(text);
+                if (SDL_SetClipboardText(text) < 0) {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                 "SDL_SetClipboardText() failed: %s", SDL_GetError());
+                }
+                else {
+                    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                                "Clipboard set from host (%zu bytes)", strlen(text));
+                }
+                free(text);
+                break;
+            }
             default:
                 SDL_assert(false);
             }
