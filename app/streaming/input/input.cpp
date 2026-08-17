@@ -273,6 +273,11 @@ SdlInputHandler::~SdlInputHandler()
 #endif
 }
 
+bool SdlInputHandler::handleTextInput(const char* text)
+{
+    return m_Panel != nullptr && m_Panel->handleTextInput(text);
+}
+
 void SdlInputHandler::pollPanel()
 {
     if (m_Panel != nullptr) {

@@ -88,6 +88,9 @@ SDL_Surface* PanelPainter::paint(const Model& model)
         height += model.lines.size() * (rowMetrics.height() + 6) + 14;
     }
     height += model.rows.size() * kRowHeight;
+    if (model.inputActive) {
+        height += 12 + rowMetrics.height() + 12 + kRowHeight;
+    }
     if (!model.message.isEmpty()) {
         height += 14 + smallMetrics.height();
     }
@@ -179,6 +182,33 @@ SDL_Surface* PanelPainter::paint(const Model& model)
         }
 
         y += kRowHeight;
+    }
+
+    if (model.inputActive) {
+        y += 12;
+        painter.setFont(m_RowFont);
+        painter.setPen(kMuted);
+        painter.drawText(QRect(kPadding, y, width - kPadding * 2, rowMetrics.height()),
+                         Qt::AlignLeft | Qt::AlignVCenter, model.inputLabel);
+        y += rowMetrics.height() + 12;
+
+        QRect field(kPadding, y, width - kPadding * 2, kRowHeight - 8);
+        QPainterPath fieldPath;
+        fieldPath.addRoundedRect(field, 8, 8);
+        painter.fillPath(fieldPath, QColor(0, 0, 0, 0x66));
+        painter.setPen(QPen(kAccent, 2));
+        painter.drawPath(fieldPath);
+
+        // Dots, not characters. Someone reading over a shoulder is the
+        // ordinary case for a device used on a sofa.
+        QString shown = model.inputMasked
+            ? QString(model.inputValue.length(), QChar(0x2022))
+            : model.inputValue;
+
+        painter.setPen(kText);
+        painter.drawText(field.adjusted(12, 0, -12, 0),
+                         Qt::AlignLeft | Qt::AlignVCenter, shown + QStringLiteral("_"));
+        y += kRowHeight - 8;
     }
 
     if (!model.message.isEmpty()) {

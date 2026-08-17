@@ -41,6 +41,14 @@ public:
         int hovered = -1;
         QString message;         // progress or error, below the rows
         QString hint;
+
+        // An input field, shown when the panel is asking for something. The
+        // value is drawn as dots when masked, because a Wi-Fi password typed
+        // on a screen behind someone's shoulder is still a password.
+        QString inputLabel;
+        QString inputValue;
+        bool inputMasked = false;
+        bool inputActive = false;
     };
 
     PanelPainter();

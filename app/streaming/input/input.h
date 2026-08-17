@@ -135,6 +135,9 @@ public:
     // called from the event loop rather than on a timer.
     void pollPanel();
 
+    // Only the panel wants these. Returns true when it took the event.
+    bool handleTextInput(const char* text);
+
     int getAttachedGamepadMask();
 
     void raiseAllKeys();

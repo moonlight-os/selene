@@ -141,6 +141,10 @@ bool PanelMenu::open()
 
 void PanelMenu::close()
 {
+    // Leaving it on would send every later keypress to the panel's idea of a
+    // text field instead of to the host.
+    SDL_StopTextInput();
+
     m_Open = false;
     Session::get()->getOverlayManager().setOverlayState(Overlay::OverlayPanel, false);
 }
@@ -154,6 +158,8 @@ QStringList PanelMenu::currentItems() const
         return { "Back" };
     case Screen::Networks:
         return m_Networks.isEmpty() ? QStringList { "Back" } : m_Networks + QStringList { "Back" };
+    case Screen::Password:
+        return { "Join", "Cancel" };
     }
     return {};
 }
@@ -183,7 +189,16 @@ bool PanelMenu::handleKey(const SDL_KeyboardEvent* event)
     case SDLK_KP_ENTER:
         activateSelection();
         break;
+    case SDLK_BACKSPACE:
+        if (m_Screen == Screen::Password) {
+            m_Password.chop(1);
+        }
+        break;
     case SDLK_ESCAPE:
+        if (m_Screen == Screen::Password) {
+            SDL_StopTextInput();
+            m_Password.clear();
+        }
         if (m_Screen == Screen::Main) {
             close();
             return true;
@@ -215,9 +230,30 @@ void PanelMenu::activateSelection()
         return;
     }
 
-    if (choice == "Back") {
+    if (choice == "Back" || choice == "Cancel") {
+        if (m_Screen == Screen::Password) {
+            SDL_StopTextInput();
+            m_Password.clear();
+        }
         m_Screen = Screen::Main;
         m_Selected = 0;
+        return;
+    }
+
+    if (choice == "Join") {
+        SDL_StopTextInput();
+
+        QJsonObject args;
+        args["ssid"] = m_PendingSsid;
+        if (!m_Password.isEmpty()) {
+            args["psk"] = m_Password;
+        }
+
+        m_PendingRequest = m_Helper->request("wifi.connect", args);
+        m_Password.clear();
+        m_Screen = Screen::Status;
+        m_Selected = 0;
+        m_Message = QStringLiteral("Joining %1...").arg(m_PendingSsid);
         return;
     }
 
@@ -238,10 +274,18 @@ void PanelMenu::activateSelection()
         return;
     }
 
-    // A network was chosen. Joining one needs a password this panel cannot
-    // yet collect, so it is deliberately not attempted -- offering it and
-    // then failing would be worse than not offering it.
-    m_Message = "Joining a network from here is not built yet";
+    // A network was chosen. The label carries the signal and lock state
+    // after a tab, so the SSID is the part before it.
+    m_PendingSsid = choice.split(QChar('\t')).value(0);
+    m_Password.clear();
+    m_Screen = Screen::Password;
+    m_Selected = 0;
+    m_Message.clear();
+
+    // Only now, and only here: text input is off for the rest of the session
+    // so that typing goes to the host as scancodes, which is the whole point
+    // of a streaming client.
+    SDL_StartTextInput();
 }
 
 void PanelMenu::applyReply(const QJsonObject& reply)
@@ -318,6 +362,13 @@ void PanelMenu::redraw()
         model.lines = m_StatusLines;
     }
 
+    if (m_Screen == Screen::Password) {
+        model.inputActive = true;
+        model.inputMasked = true;
+        model.inputLabel = QStringLiteral("Password for %1").arg(m_PendingSsid);
+        model.inputValue = m_Password;
+    }
+
     for (const auto& item : currentItems()) {
         PanelPainter::Row row;
         // Networks arrive tab-separated so the signal can sit at the right
@@ -334,6 +385,20 @@ void PanelMenu::redraw()
     if (surface != nullptr) {
         Session::get()->getOverlayManager().setOverlaySurface(Overlay::OverlayPanel, surface);
     }
+}
+
+bool PanelMenu::handleTextInput(const char* text)
+{
+    if (!m_Open || m_Screen != Screen::Password) {
+        // Swallowed anyway while the panel is open: a character that reached
+        // the host from behind an open menu would be a keystroke nobody
+        // aimed at the game.
+        return m_Open;
+    }
+
+    m_Password.append(QString::fromUtf8(text));
+    redraw();
+    return true;
 }
 
 bool PanelMenu::handleMouseMotion(int x, int y)

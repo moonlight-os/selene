@@ -2164,6 +2164,12 @@ void Session::exec()
         }
 #endif
         switch (event.type) {
+        case SDL_TEXTINPUT:
+            // Only ever wanted by the panel. Streaming itself sends
+            // scancodes and lets the host's layout decide what they mean.
+            m_InputHandler->handleTextInput(event.text.text);
+            break;
+
         case SDL_QUIT:
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                         "Quit event received");

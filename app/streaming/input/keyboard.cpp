@@ -179,13 +179,14 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
     char modifiers;
     bool shouldNotConvertToScanCodeOnServer = false;
 
-    if (event->repeat) {
-        // Ignore repeat key down events
-        SDL_assert(event->state == SDL_PRESSED);
-        return;
-    }
-
-    // The settings panel comes first, and takes everything while it is open.
+    // The settings panel comes first, and ahead of the repeat filter below.
+    //
+    // Repeats are dropped for streaming because the host does its own key
+    // repeating, and forwarding ours would double it. A text field is the one
+    // place in this client where a held key has to repeat -- backspace in a
+    // Wi-Fi password, arrows down a list of networks -- and letting SDL's
+    // repeats through gives the compositor's own delay-then-accelerate
+    // behaviour rather than a hand-rolled timer.
     //
     // Ctrl+Alt+M rather than the Ctrl+Alt+Shift+<key> the other combos use:
     // it is the combination Moonlight OS has always used for this, and users
@@ -207,7 +208,7 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
                 return;
             }
         }
-        else if (event->state == SDL_PRESSED &&
+        else if (event->state == SDL_PRESSED && !event->repeat &&
                  (event->keysym.mod & KMOD_CTRL) &&
                  (event->keysym.mod & KMOD_ALT) &&
                  !(event->keysym.mod & KMOD_SHIFT) &&
@@ -243,6 +244,13 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                         "No appliance helper, so there is no panel to open");
         }
+    }
+
+
+    if (event->repeat) {
+        // Ignore repeat key down events
+        SDL_assert(event->state == SDL_PRESSED);
+        return;
     }
 
     // Check for our special key combos

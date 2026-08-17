@@ -52,6 +52,11 @@ public:
     bool handleMouseMotion(int x, int y);
     bool handleMouseButton(const SDL_MouseButtonEvent* event);
 
+    // Typed characters, which only matter while the panel is asking for
+    // something. Selene otherwise has no use for SDL text input at all: it
+    // sends scancodes to the host and lets the host's layout decide.
+    bool handleTextInput(const char* text);
+
     // The window, so the panel can work out where it is drawn. It is centred
     // by the renderers, and a click has to be tested against the same centre
     // or the mouse lands somewhere the panel is not.
@@ -71,6 +76,7 @@ private:
         Main,
         Status,
         Networks,
+        Password,
     };
 
     void redraw();
@@ -90,6 +96,10 @@ private:
     QString m_Message;
 
     int m_PendingRequest;
+
+    // The network being joined, and what has been typed for it so far.
+    QString m_PendingSsid;
+    QString m_Password;
     int m_Hovered;
     SDL_Window* m_Window;
     int m_StreamWidth;
