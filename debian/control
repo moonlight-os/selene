@@ -32,14 +32,17 @@ Rules-Requires-Root: no
 
 # Qt dlopens its plugins and resolves QML imports at runtime, so
 # dpkg-shlibdeps cannot see either and both have to be named by hand below.
-# qt6-svg-plugins in particular carries the SVG image format plugin and icon
-# engine: libqt6svg6 alone is just the library, and without the plugins every
-# icon in the UI silently fails to render while text still draws normally.
+# qt6-svg-plugins carries the SVG image format plugin and icon engine:
+# libqt6svg6 alone is just the library, and without the plugins every icon in
+# the UI silently fails to render while text still draws normally.
+# qt6-wayland is the Wayland platform plugin -- without it Qt finds no usable
+# platform under a compositor and the client does not start at all.
 Package: selene
 Architecture: amd64
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          qt6-svg-plugins,
+         qt6-wayland,
          qml6-module-qtquick,
          qml6-module-qtquick-controls,
          qml6-module-qtquick-templates,
