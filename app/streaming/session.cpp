@@ -1839,8 +1839,45 @@ bool Session::startConnectionAsync()
         return false;
     }
 
+    sendKeyboardLayout();
+
     emit connectionStarted();
     return true;
+}
+
+// Tell the host what this keyboard is, once, now that the control stream is up.
+//
+// The client sends scancodes, which are positions; the host turns positions
+// into characters with its own layout. That mismatch is exactly why Moonlight
+// OS has a keymap wizard and why its hotkeys are bound positionally -- none of
+// which ever reached the host before.
+//
+// XKB_DEFAULT_LAYOUT is where the session puts it (moonlight-common exports it
+// before starting the compositor, from the layout chosen in the wizard). On a
+// desktop Linux session it is usually unset, because the compositor holds the
+// keymap instead; reading it from the compositor is a better source and a
+// larger change, so an unset variable simply means nothing is sent.
+void Session::sendKeyboardLayout()
+{
+    if (!LiGetPeerFeatureVersion(ML_FEATURE_KEYBOARD_LAYOUT)) {
+        return;
+    }
+
+    QByteArray layout = qgetenv("XKB_DEFAULT_LAYOUT");
+    if (layout.isEmpty()) {
+        return;
+    }
+
+    QByteArray variant = qgetenv("XKB_DEFAULT_VARIANT");
+
+    if (LiSendKeyboardLayout(layout.constData(),
+                             variant.isEmpty() ? nullptr : variant.constData()) == 0) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Told the host our keyboard layout: %s%s%s",
+                    layout.constData(),
+                    variant.isEmpty() ? "" : "/",
+                    variant.isEmpty() ? "" : variant.constData());
+    }
 }
 
 void Session::flushWindowEvents()
