@@ -1,4 +1,5 @@
 #include "session.h"
+#include "clipboard.h"
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
 #include "backend/richpresencemanager.h"
@@ -2187,11 +2188,7 @@ void Session::exec()
                 // not see the host's own text as a fresh local copy and offer
                 // it straight back -- which is how a clipboard loop starts.
                 m_LastClipboardText = QString::fromUtf8(text);
-                if (SDL_SetClipboardText(text) < 0) {
-                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                                 "SDL_SetClipboardText() failed: %s", SDL_GetError());
-                }
-                else {
+                if (Clipboard::setText(QString::fromUtf8(text))) {
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Clipboard set from host (%zu bytes)", strlen(text));
                 }
