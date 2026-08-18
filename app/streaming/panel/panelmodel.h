@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
 #include <QPoint>
@@ -104,6 +105,13 @@ private:
         QString reason;   // why it is not offered; empty when it is
         bool shared = false;
         bool blocked = false;  // `protected` on the wire, and a C++ keyword here
+
+        bool operator==(const UsbDevice& other) const
+        {
+            return busid == other.busid && label == other.label
+                   && reason == other.reason && shared == other.shared
+                   && blocked == other.blocked;
+        }
     };
 
     // As many rows as fit comfortably above a stream without the panel
@@ -120,7 +128,9 @@ private:
     int ask(const QString& op, const QJsonObject& args = {});
     void applyReply(const QString& op, const QJsonObject& reply);
     void applyDevices(const QJsonObject& result);
-    void applyUsb(const QJsonObject& result);
+    // True when the list actually differs, so a refresh nobody asked for
+    // costs a request and not a repaint.
+    bool applyUsb(const QJsonObject& result);
 
     // Leaves a screen, resetting everything that was about the old one.
     void goTo(Screen screen);
@@ -152,7 +162,21 @@ private:
     QString m_PendingMac;
     QString m_PendingName;
 
+    // Plugging a device in is the one change to this panel that comes from
+    // outside it, so the USB screen asks again while it is open rather than
+    // showing whatever was true when it was entered. Nothing else needs this:
+    // networks and Bluetooth devices appear because you asked them to.
+    static const int k_UsbRefreshMs = 3000;
+
+    bool usbBusy() const;
+
     QVector<UsbDevice> m_UsbDevices;
     bool m_UsbPaired;
     QString m_PendingBusid;
+    QElapsedTimer m_UsbRefresh;
+    bool m_UsbChanged;   // set by applyUsb, read by poll
+
+    // The id of a refresh nobody asked for, so its reply can be applied
+    // without stepping on a message the user is still reading.
+    int m_BackgroundList;
 };

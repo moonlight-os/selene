@@ -12,8 +12,23 @@ PanelModel::PanelModel()
       m_CloseRequested(false),
       m_BtPresent(false),
       m_BtPowered(false),
-      m_UsbPaired(false)
+      m_UsbPaired(false),
+      m_BackgroundList(0),
+      m_UsbChanged(false)
 {
+}
+
+bool PanelModel::usbBusy() const
+{
+    // A share or unshare in flight owns the screen until it answers: asking
+    // for the list underneath it would race its result and overwrite the
+    // progress the user is watching.
+    for (const auto& op : m_Pending) {
+        if (op.startsWith(QLatin1String("usb."))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 PanelModel::~PanelModel()
@@ -503,6 +518,7 @@ void PanelModel::activateSelection()
     if (choice == "USB devices") {
         goTo(Screen::Usb);
         ask(QStringLiteral("usb.list"));
+        m_UsbRefresh.start();
         m_Message = QStringLiteral("Looking...");
         return;
     }
@@ -623,8 +639,11 @@ void PanelModel::applyDevices(const QJsonObject& result)
     ensureVisible();
 }
 
-void PanelModel::applyUsb(const QJsonObject& result)
+bool PanelModel::applyUsb(const QJsonObject& result)
 {
+    auto previous = m_UsbDevices;
+    bool wasPaired = m_UsbPaired;
+
     m_UsbPaired = result.value("paired").toBool();
 
     m_UsbDevices.clear();
@@ -643,6 +662,8 @@ void PanelModel::applyUsb(const QJsonObject& result)
     // was selected, and "Hand everything back" comes and goes with it.
     m_Selected = qBound(0, m_Selected, qMax(0, currentItems().size() - 1));
     ensureVisible();
+
+    return m_UsbDevices != previous || m_UsbPaired != wasPaired;
 }
 
 void PanelModel::applyReply(const QString& op, const QJsonObject& reply)
@@ -673,7 +694,7 @@ void PanelModel::applyReply(const QString& op, const QJsonObject& reply)
     }
 
     if (op.startsWith(QLatin1String("usb."))) {
-        applyUsb(result);
+        m_UsbChanged = applyUsb(result);
         if (result.contains("message")) {
             m_Message = result.value("message").toString();
         }
@@ -714,14 +735,51 @@ bool PanelModel::poll()
         // difference between "scanning" and an apparently frozen panel.
         if (reply.value("event").toString() == QLatin1String("progress")) {
             m_Message = reply.value("message").toString();
+            changed = true;
+            continue;
         }
-        else {
-            // take(), not value(): the reply is terminal, so the request it
-            // answers is done and leaving the id behind would grow the map
-            // for as long as the panel is open.
-            applyReply(m_Pending.take(reply.value("id").toInt()), reply);
+
+        // take(), not value(): the reply is terminal, so the request it
+        // answers is done and leaving the id behind would grow the map
+        // for as long as the panel is open.
+        int id = reply.value("id").toInt();
+        QString op = m_Pending.take(id);
+
+        bool background = id != 0 && id == m_BackgroundList;
+        if (background) {
+            m_BackgroundList = 0;
+
+            // A refresh nobody asked for says nothing when it fails: the
+            // device is simply still listed as it was, which is true, and an
+            // error appearing on its own every three seconds would be worse
+            // than the stale row it is complaining about.
+            if (!reply.value("ok").toBool()) {
+                continue;
+            }
         }
+
+        QString showing = m_Message;
+        m_UsbChanged = true;
+        applyReply(op, reply);
+        if (background) {
+            m_Message = showing;
+            // Nothing was plugged in or taken out, so there is nothing new to
+            // draw. Repainting anyway would have the panel redrawing itself
+            // every three seconds for as long as the screen is open.
+            changed = changed || m_UsbChanged;
+            continue;
+        }
+
         changed = true;
+    }
+
+    // Devices arrive and leave while the screen is open -- that is the whole
+    // reason this screen exists -- so it asks again rather than showing what
+    // was true when it was entered.
+    if (m_Screen == Screen::Usb && m_BackgroundList == 0 && !usbBusy()
+            && m_UsbRefresh.isValid() && m_UsbRefresh.elapsed() >= k_UsbRefreshMs) {
+        m_BackgroundList = ask(QStringLiteral("usb.list"));
+        m_UsbRefresh.restart();
     }
 
     return changed;
