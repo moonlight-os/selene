@@ -39,6 +39,13 @@ public:
         QVector<Row> rows;
         int selected = -1;
         int hovered = -1;
+
+        // How many rows are scrolled out of sight either way. A list long
+        // enough to need this -- Wi-Fi in a block of flats, Bluetooth in a
+        // room with two dozen radios in it -- would otherwise grow a panel
+        // taller than the screen it is centred on.
+        int scrollAbove = 0;
+        int scrollBelow = 0;
         QString message;         // progress or error, below the rows
         QString hint;
 

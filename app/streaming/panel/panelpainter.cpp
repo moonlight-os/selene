@@ -29,6 +29,11 @@ const int kMaxWidth = 820;
 // the eight renderers in its own API. A shadow gives the panel the same
 // separation from the picture for none of that, and works everywhere.
 const int kShadowMargin = 36;
+
+QString moreLabel(int count, const QString& arrow)
+{
+    return QStringLiteral("%1  %2 more").arg(arrow).arg(count);
+}
 }
 
 PanelPainter::PanelPainter()
@@ -66,6 +71,13 @@ int PanelPainter::measureWidth(const Model& model) const
         widest = qMax(widest, width);
     }
 
+    if (model.scrollAbove > 0) {
+        widest = qMax(widest, smallMetrics.horizontalAdvance(moreLabel(model.scrollAbove, QStringLiteral("\u25B2"))));
+    }
+    if (model.scrollBelow > 0) {
+        widest = qMax(widest, smallMetrics.horizontalAdvance(moreLabel(model.scrollBelow, QStringLiteral("\u25BC"))));
+    }
+
     widest = qMax(widest, smallMetrics.horizontalAdvance(model.message));
     widest = qMax(widest, smallMetrics.horizontalAdvance(model.hint));
 
@@ -87,7 +99,13 @@ SDL_Surface* PanelPainter::paint(const Model& model)
     if (!model.lines.isEmpty()) {
         height += model.lines.size() * (rowMetrics.height() + 6) + 14;
     }
+    if (model.scrollAbove > 0) {
+        height += smallMetrics.height() + 6;
+    }
     height += model.rows.size() * kRowHeight;
+    if (model.scrollBelow > 0) {
+        height += 6 + smallMetrics.height();
+    }
     if (model.inputActive) {
         height += 12 + rowMetrics.height() + 12 + kRowHeight;
     }
@@ -149,6 +167,15 @@ SDL_Surface* PanelPainter::paint(const Model& model)
         y += 14;
     }
 
+    if (model.scrollAbove > 0) {
+        painter.setFont(m_SmallFont);
+        painter.setPen(kMuted);
+        painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
+                         Qt::AlignHCenter | Qt::AlignVCenter,
+                         moreLabel(model.scrollAbove, QStringLiteral("\u25B2")));
+        y += smallMetrics.height() + 6;
+    }
+
     painter.setFont(m_RowFont);
     for (int i = 0; i < model.rows.size(); i++) {
         const auto& row = model.rows.at(i);
@@ -182,6 +209,16 @@ SDL_Surface* PanelPainter::paint(const Model& model)
         }
 
         y += kRowHeight;
+    }
+
+    if (model.scrollBelow > 0) {
+        y += 6;
+        painter.setFont(m_SmallFont);
+        painter.setPen(kMuted);
+        painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
+                         Qt::AlignHCenter | Qt::AlignVCenter,
+                         moreLabel(model.scrollBelow, QStringLiteral("\u25BC")));
+        y += smallMetrics.height();
     }
 
     if (model.inputActive) {

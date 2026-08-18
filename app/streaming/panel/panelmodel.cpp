@@ -8,7 +8,10 @@ PanelModel::PanelModel()
       m_Screen(Screen::Main),
       m_Selected(0),
       m_Hovered(-1),
-      m_CloseRequested(false)
+      m_Top(0),
+      m_CloseRequested(false),
+      m_BtPresent(false),
+      m_BtPowered(false)
 {
 }
 
@@ -24,23 +27,68 @@ bool PanelModel::isAvailable() const
 
 void PanelModel::reset()
 {
-    m_Screen = Screen::Main;
-    m_Selected = 0;
+    goTo(Screen::Main);
     m_Hovered = -1;
     m_CloseRequested = false;
-    m_Message.clear();
     m_Password.clear();
 
     // Asked on open rather than on entering the status screen: it is the
     // first thing anyone opening this wants to know, and it costs one line.
-    m_Helper->request("status");
+    ask(QStringLiteral("status"));
+}
+
+int PanelModel::ask(const QString& op, const QJsonObject& args)
+{
+    int id = m_Helper->request(op, args);
+    if (id != 0) {
+        m_Pending.insert(id, op);
+    }
+    return id;
+}
+
+void PanelModel::goTo(Screen screen)
+{
+    m_Screen = screen;
+    m_Selected = 0;
+    m_Top = 0;
+    m_Message.clear();
+}
+
+void PanelModel::ensureVisible()
+{
+    int count = currentItems().size();
+    int last = qMax(0, count - k_MaxVisibleRows);
+
+    if (m_Selected < m_Top) {
+        m_Top = m_Selected;
+    }
+    else if (m_Selected >= m_Top + k_MaxVisibleRows) {
+        m_Top = m_Selected - k_MaxVisibleRows + 1;
+    }
+
+    m_Top = qBound(0, m_Top, last);
+}
+
+int PanelModel::itemAt(int drawnRow) const
+{
+    return drawnRow < 0 ? -1 : m_Top + drawnRow;
+}
+
+const PanelModel::Device* PanelModel::selectedDevice() const
+{
+    for (const auto& device : m_Devices) {
+        if (device.mac == m_PendingMac) {
+            return &device;
+        }
+    }
+    return nullptr;
 }
 
 QStringList PanelModel::currentItems() const
 {
     switch (m_Screen) {
     case Screen::Main:
-        return { "Status", "Wi-Fi networks", "Power", "Close" };
+        return { "Status", "Wi-Fi networks", "Bluetooth", "Power", "Close" };
     case Screen::Status:
         return { "Back" };
     case Screen::Networks:
@@ -55,6 +103,49 @@ QStringList PanelModel::currentItems() const
         return { "No, go back", m_PendingPower == QLatin1String("reboot")
                                     ? QStringLiteral("Yes, reboot now")
                                     : QStringLiteral("Yes, shut down now") };
+
+    case Screen::Bluetooth: {
+        if (!m_BtPresent) {
+            return { "Back" };
+        }
+        if (!m_BtPowered) {
+            return { "Turn Bluetooth on", "Back" };
+        }
+
+        QStringList items;
+        for (const auto& device : m_Devices) {
+            // The address is never shown. It is 17 characters of nothing
+            // anyone recognises, and on a list of "Xbox Wireless Controller"
+            // and a headset it would be the only thing that did not fit.
+            items.append(QStringLiteral("%1\t%2").arg(device.name,
+                device.connected ? QStringLiteral("connected")
+                                 : device.paired ? QStringLiteral("paired")
+                                                 : QString()));
+        }
+        items.append(QStringLiteral("Look for new devices"));
+        items.append(QStringLiteral("Turn Bluetooth off"));
+        items.append(QStringLiteral("Back"));
+        return items;
+    }
+
+    case Screen::BluetoothDevice: {
+        const Device* device = selectedDevice();
+        if (device == nullptr) {
+            return { "Back" };
+        }
+        if (device->connected) {
+            return { "Disconnect", "Forget this device", "Back" };
+        }
+        if (device->paired) {
+            return { "Connect", "Forget this device", "Back" };
+        }
+        return { "Pair and connect", "Back" };
+    }
+
+    case Screen::ConfirmForget:
+        // Keeping it is the recoverable answer, so it goes first and starts
+        // selected -- the same shape as the power confirmation.
+        return { "No, keep it", QStringLiteral("Yes, forget %1").arg(m_PendingName) };
     }
     return {};
 }
@@ -68,13 +159,27 @@ PanelPainter::Model PanelModel::model() const
 {
     PanelPainter::Model out;
     out.title = QStringLiteral("Moonlight OS");
-    out.selected = m_Selected;
-    out.hovered = m_Hovered;
     out.message = m_Message;
     out.hint = QStringLiteral("Arrows or mouse  ·  Enter to choose  ·  Esc to go back");
 
     if (m_Screen == Screen::Status) {
         out.lines = m_StatusLines;
+    }
+
+    if (m_Screen == Screen::Bluetooth) {
+        if (!m_BtPresent) {
+            out.lines = { QStringLiteral("This machine has no Bluetooth adapter.") };
+        }
+        else if (!m_BtPowered) {
+            out.lines = { QStringLiteral("Bluetooth is off.") };
+        }
+        else if (m_Devices.isEmpty()) {
+            out.lines = { QStringLiteral("Nothing paired yet.") };
+        }
+    }
+
+    if (m_Screen == Screen::BluetoothDevice) {
+        out.lines = { m_PendingName };
     }
 
     if (m_Screen == Screen::Password) {
@@ -84,17 +189,30 @@ PanelPainter::Model PanelModel::model() const
         out.inputValue = m_Password;
     }
 
-    for (const auto& item : currentItems()) {
+    // Only the visible window is handed to the painter, which sizes the card
+    // to what it is given -- so a scan that turns up two dozen radios makes a
+    // panel that scrolls rather than one taller than the display.
+    auto items = currentItems();
+    int first = qBound(0, m_Top, qMax(0, items.size() - 1));
+    int last = qMin(items.size(), first + k_MaxVisibleRows);
+
+    for (int i = first; i < last; i++) {
         PanelPainter::Row row;
-        // Networks arrive tab-separated so the signal can sit at the right
-        // edge instead of being run into the name.
-        auto parts = item.split(QChar('\t'));
+        // Rows arrive tab-separated so a detail -- a signal strength, whether
+        // a device is connected -- can sit at the right edge instead of being
+        // run into the name.
+        auto parts = items.at(i).split(QChar('\t'));
         row.text = parts.value(0);
         if (parts.size() > 1) {
             row.detail = parts.mid(1).join(QChar(' ')).trimmed();
         }
         out.rows.append(row);
     }
+
+    out.selected = m_Selected - first;
+    out.hovered = m_Hovered < 0 ? -1 : m_Hovered - first;
+    out.scrollAbove = first;
+    out.scrollBelow = items.size() - last;
 
     return out;
 }
@@ -107,11 +225,13 @@ bool PanelModel::handleKey(Key key)
     case Key::Up:
         if (!items.isEmpty()) {
             m_Selected = (m_Selected + items.size() - 1) % items.size();
+            ensureVisible();
         }
         break;
     case Key::Down:
         if (!items.isEmpty()) {
             m_Selected = (m_Selected + 1) % items.size();
+            ensureVisible();
         }
         break;
     case Key::Activate:
@@ -130,9 +250,12 @@ bool PanelModel::handleKey(Key key)
             m_CloseRequested = true;
             break;
         }
-        m_Screen = Screen::Main;
-        m_Selected = 0;
-        m_Message.clear();
+        // A device screen and the confirmation behind it belong to the
+        // Bluetooth list, not to the top: Escape from "forget this?" landing
+        // on the main menu would lose the list you were working through.
+        goTo(m_Screen == Screen::BluetoothDevice || m_Screen == Screen::ConfirmForget
+                 ? Screen::Bluetooth
+                 : Screen::Main);
         break;
     }
 
@@ -148,22 +271,23 @@ void PanelModel::textEntered(const QString& text)
 
 bool PanelModel::setHovered(int row)
 {
-    if (m_Hovered == row) {
+    int item = itemAt(row);
+    if (m_Hovered == item) {
         return false;
     }
 
-    m_Hovered = row;
+    m_Hovered = item;
     return true;
 }
 
 void PanelModel::activateRow(int row)
 {
-    auto items = currentItems();
-    if (row < 0 || row >= items.size()) {
+    int item = itemAt(row);
+    if (item < 0 || item >= currentItems().size()) {
         return;
     }
 
-    m_Selected = row;
+    m_Selected = item;
     activateSelection();
 }
 
@@ -176,6 +300,31 @@ void PanelModel::activateSelection()
 
     QString choice = items.at(m_Selected);
 
+    // Device rows are matched by position, before any label is compared: the
+    // names come off other people's hardware, and one of them being called
+    // "Back" must not make it act like the Back button.
+    if (m_Screen == Screen::Bluetooth && m_BtPowered && m_Selected < m_Devices.size()) {
+        const auto& device = m_Devices.at(m_Selected);
+        m_PendingMac = device.mac;
+        m_PendingName = device.name;
+        goTo(Screen::BluetoothDevice);
+        return;
+    }
+
+    if (m_Screen == Screen::ConfirmForget) {
+        if (choice.startsWith(QLatin1String("Yes, "))) {
+            QJsonObject args;
+            args["mac"] = m_PendingMac;
+            ask(QStringLiteral("bluetooth.forget"), args);
+            goTo(Screen::Bluetooth);
+            m_Message = QStringLiteral("Forgetting %1...").arg(m_PendingName);
+        }
+        else {
+            goTo(Screen::Bluetooth);
+        }
+        return;
+    }
+
     if (choice == "Close") {
         m_CloseRequested = true;
         return;
@@ -185,55 +334,91 @@ void PanelModel::activateSelection()
         if (m_Screen == Screen::Password) {
             m_Password.clear();
         }
-        m_Screen = Screen::Main;
-        m_Selected = 0;
-        m_Message.clear();
+        goTo(m_Screen == Screen::BluetoothDevice ? Screen::Bluetooth : Screen::Main);
         return;
     }
 
     if (choice == "Status") {
-        m_Screen = Screen::Status;
-        m_Selected = 0;
-        m_Helper->request("status");
+        goTo(Screen::Status);
+        ask(QStringLiteral("status"));
         m_Message = QStringLiteral("Checking...");
         return;
     }
 
     if (choice == "Wi-Fi networks") {
-        m_Screen = Screen::Networks;
-        m_Selected = 0;
+        goTo(Screen::Networks);
         m_Networks.clear();
-        m_Helper->request("wifi.list");
+        ask(QStringLiteral("wifi.list"));
         m_Message = QStringLiteral("Scanning...");
         return;
     }
 
+    if (choice == "Bluetooth") {
+        goTo(Screen::Bluetooth);
+        ask(QStringLiteral("bluetooth.status"));
+        m_Message = QStringLiteral("Checking...");
+        return;
+    }
+
+    if (choice == "Look for new devices") {
+        ask(QStringLiteral("bluetooth.scan"));
+        m_Message = QStringLiteral("Looking for devices...");
+        return;
+    }
+
+    if (choice == "Turn Bluetooth on" || choice == "Turn Bluetooth off") {
+        QJsonObject args;
+        args["on"] = choice.endsWith(QLatin1String("on"));
+        ask(QStringLiteral("bluetooth.power"), args);
+        m_Message = QStringLiteral("Just a moment...");
+        return;
+    }
+
+    if (choice == "Connect" || choice == "Disconnect" || choice == "Pair and connect") {
+        QJsonObject args;
+        args["mac"] = m_PendingMac;
+        ask(choice == "Disconnect" ? QStringLiteral("bluetooth.disconnect")
+                                   : choice == "Connect" ? QStringLiteral("bluetooth.connect")
+                                                         : QStringLiteral("bluetooth.pair"),
+            args);
+
+        // Straight back to the list, where the progress events land and the
+        // refreshed state shows up. Waiting on the device screen would mean
+        // watching a row whose label is about to stop being true.
+        goTo(Screen::Bluetooth);
+        m_Message = QStringLiteral("%1 %2...").arg(
+            choice == "Disconnect" ? QStringLiteral("Disconnecting") : QStringLiteral("Connecting to"),
+            m_PendingName);
+        return;
+    }
+
+    if (choice == "Forget this device") {
+        goTo(Screen::ConfirmForget);
+        m_Message = QStringLiteral("You will have to pair it again.");
+        return;
+    }
+
     if (choice == "Power") {
-        m_Screen = Screen::Power;
-        m_Selected = 0;
-        m_Message.clear();
+        goTo(Screen::Power);
         return;
     }
 
     if (choice == "Reboot" || choice == "Shut down") {
         m_PendingPower = choice == "Reboot" ? QStringLiteral("reboot") : QStringLiteral("poweroff");
-        m_Screen = Screen::ConfirmPower;
-        m_Selected = 0;  // on "No"
+        goTo(Screen::ConfirmPower);  // selection starts on "No"
         m_Message = QStringLiteral("The stream will end.");
         return;
     }
 
     if (choice == "No, go back") {
-        m_Screen = Screen::Power;
-        m_Selected = 0;
-        m_Message.clear();
+        goTo(Screen::Power);
         return;
     }
 
     if (choice.startsWith(QLatin1String("Yes, "))) {
         QJsonObject args;
         args["action"] = m_PendingPower;
-        m_Helper->request("system.power", args);
+        ask(QStringLiteral("system.power"), args);
         m_Message = QStringLiteral("Asking the system...");
         return;
     }
@@ -245,10 +430,9 @@ void PanelModel::activateSelection()
             args["psk"] = m_Password;
         }
 
-        m_Helper->request("wifi.connect", args);
+        ask(QStringLiteral("wifi.connect"), args);
         m_Password.clear();
-        m_Screen = Screen::Status;
-        m_Selected = 0;
+        goTo(Screen::Status);
         m_Message = QStringLiteral("Joining %1...").arg(m_PendingSsid);
         return;
     }
@@ -258,13 +442,41 @@ void PanelModel::activateSelection()
     if (m_Screen == Screen::Networks) {
         m_PendingSsid = choice.split(QChar('\t')).value(0);
         m_Password.clear();
-        m_Screen = Screen::Password;
-        m_Selected = 0;
-        m_Message.clear();
+        goTo(Screen::Password);
     }
 }
 
-void PanelModel::applyReply(const QJsonObject& reply)
+void PanelModel::applyDevices(const QJsonObject& result)
+{
+    if (result.contains("present")) {
+        m_BtPresent = result.value("present").toBool();
+        m_BtPowered = result.value("powered").toBool();
+    }
+    else {
+        // Every other bluetooth op only answers when the radio was on, so a
+        // device list is itself proof of an adapter that is powered.
+        m_BtPresent = true;
+        m_BtPowered = true;
+    }
+
+    m_Devices.clear();
+    for (auto value : result.value("devices").toArray()) {
+        auto object = value.toObject();
+        Device device;
+        device.mac = object.value("mac").toString();
+        device.name = object.value("name").toString();
+        device.paired = object.value("paired").toBool();
+        device.connected = object.value("connected").toBool();
+        m_Devices.append(device);
+    }
+
+    // The selection was an index into the old list, and the new one can be a
+    // different length -- after forgetting a device, shorter.
+    m_Selected = qBound(0, m_Selected, qMax(0, currentItems().size() - 1));
+    ensureVisible();
+}
+
+void PanelModel::applyReply(const QString& op, const QJsonObject& reply)
 {
     if (!reply.value("ok").toBool()) {
         auto error = reply.value("error").toObject();
@@ -276,7 +488,7 @@ void PanelModel::applyReply(const QJsonObject& reply)
     m_Message.clear();
     auto result = reply.value("result").toObject();
 
-    if (result.contains("networks")) {
+    if (op == QLatin1String("wifi.list")) {
         m_Networks.clear();
         for (auto value : result.value("networks").toArray()) {
             auto network = value.toObject();
@@ -291,13 +503,28 @@ void PanelModel::applyReply(const QJsonObject& reply)
         return;
     }
 
-    if (result.contains("hostname")) {
-        m_StatusLines = {
-            QStringLiteral("Name     %1").arg(result.value("hostname").toString()),
-            QStringLiteral("Address  %1").arg(result.value("address").toString(QStringLiteral("none"))),
-            QStringLiteral("Wi-Fi    %1").arg(result.value("wifi").toString(QStringLiteral("not connected"))),
-        };
+    if (op.startsWith(QLatin1String("bluetooth."))) {
+        applyDevices(result);
+        // An op can succeed and still have something to say -- paired but not
+        // yet connected is a real state, and silence would read as failure.
+        if (result.contains("message")) {
+            m_Message = result.value("message").toString();
+        }
+        return;
     }
+
+    // status, and wifi.connect which answers with the status it produced.
+    // Named rather than left as the fallback: an untracked id would otherwise
+    // blank the status lines with the fields it does not have.
+    if (op != QLatin1String("status") && op != QLatin1String("wifi.connect")) {
+        return;
+    }
+
+    m_StatusLines = {
+        QStringLiteral("Name     %1").arg(result.value("hostname").toString()),
+        QStringLiteral("Address  %1").arg(result.value("address").toString(QStringLiteral("none"))),
+        QStringLiteral("Wi-Fi    %1").arg(result.value("wifi").toString(QStringLiteral("not connected"))),
+    };
 }
 
 bool PanelModel::poll()
@@ -312,7 +539,10 @@ bool PanelModel::poll()
             m_Message = reply.value("message").toString();
         }
         else {
-            applyReply(reply);
+            // take(), not value(): the reply is terminal, so the request it
+            // answers is done and leaving the id behind would grow the map
+            // for as long as the panel is open.
+            applyReply(m_Pending.take(reply.value("id").toInt()), reply);
         }
         changed = true;
     }
