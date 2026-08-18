@@ -86,6 +86,9 @@ private:
         Bluetooth,
         BluetoothDevice,
         ConfirmForget,
+        Usb,
+        UsbDevice,
+        ConfirmShare,
     };
 
     struct Device {
@@ -93,6 +96,14 @@ private:
         QString name;
         bool paired = false;
         bool connected = false;
+    };
+
+    struct UsbDevice {
+        QString busid;
+        QString label;
+        QString reason;   // why it is not offered; empty when it is
+        bool shared = false;
+        bool blocked = false;  // `protected` on the wire, and a C++ keyword here
     };
 
     // As many rows as fit comfortably above a stream without the panel
@@ -109,12 +120,14 @@ private:
     int ask(const QString& op, const QJsonObject& args = {});
     void applyReply(const QString& op, const QJsonObject& reply);
     void applyDevices(const QJsonObject& result);
+    void applyUsb(const QJsonObject& result);
 
     // Leaves a screen, resetting everything that was about the old one.
     void goTo(Screen screen);
     void ensureVisible();
     int itemAt(int drawnRow) const;
     const Device* selectedDevice() const;
+    const UsbDevice* selectedUsb() const;
 
     HelperClient* m_Helper;
     Screen m_Screen;
@@ -138,4 +151,8 @@ private:
     bool m_BtPowered;
     QString m_PendingMac;
     QString m_PendingName;
+
+    QVector<UsbDevice> m_UsbDevices;
+    bool m_UsbPaired;
+    QString m_PendingBusid;
 };

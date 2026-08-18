@@ -11,7 +11,8 @@ PanelModel::PanelModel()
       m_Top(0),
       m_CloseRequested(false),
       m_BtPresent(false),
-      m_BtPowered(false)
+      m_BtPowered(false),
+      m_UsbPaired(false)
 {
 }
 
@@ -74,6 +75,16 @@ int PanelModel::itemAt(int drawnRow) const
     return drawnRow < 0 ? -1 : m_Top + drawnRow;
 }
 
+const PanelModel::UsbDevice* PanelModel::selectedUsb() const
+{
+    for (const auto& device : m_UsbDevices) {
+        if (device.busid == m_PendingBusid) {
+            return &device;
+        }
+    }
+    return nullptr;
+}
+
 const PanelModel::Device* PanelModel::selectedDevice() const
 {
     for (const auto& device : m_Devices) {
@@ -88,7 +99,7 @@ QStringList PanelModel::currentItems() const
 {
     switch (m_Screen) {
     case Screen::Main:
-        return { "Status", "Wi-Fi networks", "Bluetooth", "Power", "Close" };
+        return { "Status", "Wi-Fi networks", "Bluetooth", "USB devices", "Power", "Close" };
     case Screen::Status:
         return { "Back" };
     case Screen::Networks:
@@ -146,6 +157,46 @@ QStringList PanelModel::currentItems() const
         // Keeping it is the recoverable answer, so it goes first and starts
         // selected -- the same shape as the power confirmation.
         return { "No, keep it", QStringLiteral("Yes, forget %1").arg(m_PendingName) };
+
+    case Screen::Usb: {
+        QStringList items;
+        bool anyShared = false;
+        for (const auto& device : m_UsbDevices) {
+            anyShared = anyShared || device.shared;
+            // The reason itself is not put in the right-hand column: it is a
+            // sentence, and a sentence there would set the panel's width to
+            // the longest explanation on the machine. It gets the device
+            // screen, where there is a line to put it on.
+            items.append(QStringLiteral("%1\t%2").arg(device.label,
+                device.shared ? QStringLiteral("shared")
+                              : device.reason.isEmpty() ? QString()
+                                                        : QStringLiteral("not offered")));
+        }
+        if (anyShared && m_UsbPaired) {
+            items.append(QStringLiteral("Hand everything back"));
+        }
+        items.append(QStringLiteral("Back"));
+        return items;
+    }
+
+    case Screen::UsbDevice: {
+        const UsbDevice* device = selectedUsb();
+        if (device == nullptr || device->blocked) {
+            return { "Back" };
+        }
+        if (device->shared) {
+            return { "Stop sharing", "Back" };
+        }
+        // A device the policy declined can still be handed over -- it is
+        // advice, not a rule -- but the button says so, because the reason
+        // for declining is on screen right above it.
+        return { device->reason.isEmpty() ? QStringLiteral("Share with the host PC")
+                                          : QStringLiteral("Share it anyway"),
+                 QStringLiteral("Back") };
+    }
+
+    case Screen::ConfirmShare:
+        return { "No, leave it alone", QStringLiteral("Yes, share %1").arg(m_PendingName) };
     }
     return {};
 }
@@ -180,6 +231,44 @@ PanelPainter::Model PanelModel::model() const
 
     if (m_Screen == Screen::BluetoothDevice) {
         out.lines = { m_PendingName };
+    }
+
+    if (m_Screen == Screen::Usb) {
+        bool shareable = false;
+        for (const auto& device : m_UsbDevices) {
+            shareable = shareable || device.reason.isEmpty();
+        }
+        if (m_UsbDevices.isEmpty()) {
+            out.lines = { QStringLiteral("Nothing is plugged in.") };
+        }
+        else if (!shareable) {
+            // Otherwise this screen is a list of things saying "not offered"
+            // and no indication of what would be.
+            out.lines = { QStringLiteral("Nothing plugged in needs sharing."),
+                          QStringLiteral("Wheels, pedals and dongles do; controllers already work.") };
+        }
+    }
+
+    if (m_Screen == Screen::ConfirmShare) {
+        out.lines = { m_PendingName };
+        const UsbDevice* device = selectedUsb();
+        if (device != nullptr) {
+            out.lines.append(device->reason);
+        }
+    }
+
+    if (m_Screen == Screen::UsbDevice) {
+        const UsbDevice* device = selectedUsb();
+        out.lines = { m_PendingName };
+        if (device != nullptr && !device->reason.isEmpty()) {
+            // Why it is not offered, in the words the shell menu has always
+            // used: "why is my wheel not being shared" wants an answer on
+            // screen, not in a log.
+            out.lines.append(device->reason);
+        }
+        else if (device != nullptr && !device->shared && !m_UsbPaired) {
+            out.lines.append(QStringLiteral("No host PC is paired, so it must be attached there by hand."));
+        }
     }
 
     if (m_Screen == Screen::Password) {
@@ -255,6 +344,8 @@ bool PanelModel::handleKey(Key key)
         // on the main menu would lose the list you were working through.
         goTo(m_Screen == Screen::BluetoothDevice || m_Screen == Screen::ConfirmForget
                  ? Screen::Bluetooth
+                 : m_Screen == Screen::UsbDevice ? Screen::Usb
+                 : m_Screen == Screen::ConfirmShare ? Screen::UsbDevice
                  : Screen::Main);
         break;
     }
@@ -311,6 +402,14 @@ void PanelModel::activateSelection()
         return;
     }
 
+    if (m_Screen == Screen::Usb && m_Selected < m_UsbDevices.size()) {
+        const auto& device = m_UsbDevices.at(m_Selected);
+        m_PendingBusid = device.busid;
+        m_PendingName = device.label;
+        goTo(Screen::UsbDevice);
+        return;
+    }
+
     if (m_Screen == Screen::ConfirmForget) {
         if (choice.startsWith(QLatin1String("Yes, "))) {
             QJsonObject args;
@@ -334,7 +433,10 @@ void PanelModel::activateSelection()
         if (m_Screen == Screen::Password) {
             m_Password.clear();
         }
-        goTo(m_Screen == Screen::BluetoothDevice ? Screen::Bluetooth : Screen::Main);
+        goTo(m_Screen == Screen::BluetoothDevice ? Screen::Bluetooth
+                                                 : m_Screen == Screen::UsbDevice ? Screen::Usb
+                                                 : m_Screen == Screen::ConfirmShare ? Screen::UsbDevice
+                                                                                 : Screen::Main);
         return;
     }
 
@@ -395,6 +497,51 @@ void PanelModel::activateSelection()
     if (choice == "Forget this device") {
         goTo(Screen::ConfirmForget);
         m_Message = QStringLiteral("You will have to pair it again.");
+        return;
+    }
+
+    if (choice == "USB devices") {
+        goTo(Screen::Usb);
+        ask(QStringLiteral("usb.list"));
+        m_Message = QStringLiteral("Looking...");
+        return;
+    }
+
+    if (choice == "Share it anyway") {
+        goTo(Screen::ConfirmShare);  // selection starts on "No"
+        m_Message = QStringLiteral("This is the one input you have here.");
+        return;
+    }
+
+    if (m_Screen == Screen::ConfirmShare) {
+        if (choice.startsWith(QLatin1String("Yes, "))) {
+            QJsonObject args;
+            args["busid"] = m_PendingBusid;
+            ask(QStringLiteral("usb.share"), args);
+            goTo(Screen::Usb);
+            m_Message = QStringLiteral("Sharing %1...").arg(m_PendingName);
+        }
+        else {
+            goTo(Screen::UsbDevice);
+        }
+        return;
+    }
+
+    if (choice == "Share with the host PC" || choice == "Stop sharing") {
+        QJsonObject args;
+        args["busid"] = m_PendingBusid;
+        ask(choice == "Stop sharing" ? QStringLiteral("usb.unshare")
+                                     : QStringLiteral("usb.share"), args);
+        goTo(Screen::Usb);
+        m_Message = QStringLiteral("%1 %2...").arg(
+            choice == "Stop sharing" ? QStringLiteral("Stopping") : QStringLiteral("Sharing"),
+            m_PendingName);
+        return;
+    }
+
+    if (choice == "Hand everything back") {
+        ask(QStringLiteral("usb.handback"));
+        m_Message = QStringLiteral("Asking the host PC to let go...");
         return;
     }
 
@@ -476,6 +623,28 @@ void PanelModel::applyDevices(const QJsonObject& result)
     ensureVisible();
 }
 
+void PanelModel::applyUsb(const QJsonObject& result)
+{
+    m_UsbPaired = result.value("paired").toBool();
+
+    m_UsbDevices.clear();
+    for (auto value : result.value("devices").toArray()) {
+        auto object = value.toObject();
+        UsbDevice device;
+        device.busid = object.value("busid").toString();
+        device.label = object.value("label").toString();
+        device.reason = object.value("reason").toString();
+        device.shared = object.value("shared").toBool();
+        device.blocked = object.value("protected").toBool();
+        m_UsbDevices.append(device);
+    }
+
+    // Plugging something in or taking it out changes the list under whatever
+    // was selected, and "Hand everything back" comes and goes with it.
+    m_Selected = qBound(0, m_Selected, qMax(0, currentItems().size() - 1));
+    ensureVisible();
+}
+
 void PanelModel::applyReply(const QString& op, const QJsonObject& reply)
 {
     if (!reply.value("ok").toBool()) {
@@ -499,6 +668,14 @@ void PanelModel::applyReply(const QString& op, const QJsonObject& reply)
         }
         if (m_Networks.isEmpty()) {
             m_Message = QStringLiteral("No networks in range");
+        }
+        return;
+    }
+
+    if (op.startsWith(QLatin1String("usb."))) {
+        applyUsb(result);
+        if (result.contains("message")) {
+            m_Message = result.value("message").toString();
         }
         return;
     }
