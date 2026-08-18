@@ -84,7 +84,7 @@ int PanelPainter::measureWidth(const Model& model) const
     return qBound(kMinWidth, widest + kPadding * 2 + 24, kMaxWidth);
 }
 
-SDL_Surface* PanelPainter::paint(const Model& model)
+QImage PanelPainter::render(const Model& model)
 {
     m_RowRects.clear();
 
@@ -117,22 +117,36 @@ SDL_Surface* PanelPainter::paint(const Model& model)
     }
     height += kPadding;
 
-    QImage image(width + kShadowMargin * 2, height + kShadowMargin * 2, QImage::Format_ARGB32);
-    image.fill(Qt::transparent);
+    // The shadow, as concentric rounded rects fading outwards. Cheap once, and
+    // at this size indistinguishable from a real blurred one -- but it is not
+    // cheap forty times a second, so it is drawn when the card changes size
+    // and copied every other time.
+    if (m_ShadowFor != QSize(width, height)) {
+        m_Shadow = QImage(width + kShadowMargin * 2, height + kShadowMargin * 2,
+                          QImage::Format_ARGB32);
+        m_Shadow.fill(Qt::transparent);
+
+        QPainter shadowPainter(&m_Shadow);
+        shadowPainter.setRenderHint(QPainter::Antialiasing);
+        for (int i = kShadowMargin; i > 0; i -= 3) {
+            QPainterPath halo;
+            halo.addRoundedRect(QRectF(kShadowMargin - i, kShadowMargin - i + 6,
+                                       width + i * 2, height + i * 2),
+                                kRadius + i, kRadius + i);
+            shadowPainter.fillPath(halo, QColor(0, 0, 0, 6));
+        }
+        shadowPainter.end();
+
+        m_ShadowFor = QSize(width, height);
+    }
+
+    // Shares the cached pixels until the first stroke below detaches it, which
+    // is one memcpy against a dozen antialiased rounded rects.
+    QImage image = m_Shadow;
 
     QPainter painter(&image);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::TextAntialiasing);
-
-    // The shadow, as concentric rounded rects fading outwards. Cheap, and at
-    // this size indistinguishable from a real blurred one.
-    for (int i = kShadowMargin; i > 0; i -= 3) {
-        QPainterPath halo;
-        halo.addRoundedRect(QRectF(kShadowMargin - i, kShadowMargin - i + 6,
-                                   width + i * 2, height + i * 2),
-                            kRadius + i, kRadius + i);
-        painter.fillPath(halo, QColor(0, 0, 0, 6));
-    }
 
     painter.translate(kShadowMargin, kShadowMargin);
 
@@ -268,6 +282,15 @@ SDL_Surface* PanelPainter::paint(const Model& model)
     painter.end();
 
     m_Size = image.size();
+    return image;
+}
+
+SDL_Surface* PanelPainter::paint(const Model& model)
+{
+    QImage image = render(model);
+    if (image.isNull()) {
+        return nullptr;
+    }
 
     // SDL and QImage agree on ARGB32 byte order here, but the surface must own
     // its pixels: the QImage dies with this function and the surface outlives

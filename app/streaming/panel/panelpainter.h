@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QFont>
+#include <QImage>
 #include <QRect>
 #include <QString>
 #include <QStringList>
@@ -60,6 +61,11 @@ public:
 
     PanelPainter();
 
+    // Draws the model. The window host wants the image; the in-stream overlay
+    // wants an SDL surface, and pays for the conversion rather than making
+    // the host pay for one it would only undo.
+    QImage render(const Model& model);
+
     // Draws the model and returns a new surface, or nullptr on failure. The
     // caller owns it.
     SDL_Surface* paint(const Model& model);
@@ -76,6 +82,15 @@ private:
     QFont m_TitleFont;
     QFont m_RowFont;
     QFont m_SmallFont;
+
+    // The shadow costs more than half of a repaint -- a dozen antialiased
+    // rounded rects over the whole card -- and depends on nothing but the
+    // card's size, which does not change when a highlight moves. Hovering a
+    // row would otherwise redraw it from scratch, and on the appliance's Atom
+    // that is the difference between a menu that tracks the mouse and one
+    // that does not.
+    QImage m_Shadow;
+    QSize m_ShadowFor;
 
     // Where each row landed, so a click can be turned back into a row.
     QVector<QRect> m_RowRects;

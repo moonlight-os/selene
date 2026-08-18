@@ -22,19 +22,11 @@ PanelWindow::PanelWindow()
 
 void PanelWindow::refresh()
 {
-    // The painter hands back an SDL surface because that is what the overlay
-    // needs; here the QImage inside it is what we want, so paint and copy the
-    // pixels straight back out. Cheap, and it keeps one painter rather than
-    // two that can disagree about how a row looks.
-    SDL_Surface* surface = m_Painter.paint(m_Model.model());
-    if (surface == nullptr) {
-        return;
-    }
-
-    QImage image((const uchar*)surface->pixels, surface->w, surface->h,
-                 surface->pitch, QImage::Format_ARGB32);
-    m_Image = image.copy();
-    SDL_FreeSurface(surface);
+    // The image directly, not the SDL surface the overlay needs: going through
+    // one meant allocating a surface, copying the card into it row by row, and
+    // copying it straight back out again -- twice the pixels of the drawing
+    // itself, on every keypress and every hover.
+    m_Image = m_Painter.render(m_Model.model());
 
     update();
 }
