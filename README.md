@@ -22,7 +22,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
  
 ## Downloads
-- [Windows, macOS, and Steam Link](https://github.com/moonlight-stream/moonlight-qt/releases)
+- [Windows and macOS](https://github.com/moonlight-stream/moonlight-qt/releases)
 - [Snap (for Ubuntu-based Linux distros)](https://snapcraft.io/selene)
 - [Flatpak (for other Linux distros)](https://flathub.org/apps/details/dev.mopigames.Selene)
 - [AppImage](https://github.com/moonlight-stream/moonlight-qt/releases)
@@ -71,17 +71,6 @@ Hosting for Selene's Debian and L4T package repositories is graciously provided 
     * Qt 5: `qt5-qtsvg-devel qt5-qtquickcontrols2-devel`
 * Building the Vulkan renderer requires a `libplacebo-dev`/`libplacebo-devel` version of at least v7.349.0 and FFmpeg 6.1 or later.
 
-### Steam Link Build Requirements
-* [Steam Link SDK](https://github.com/ValveSoftware/steamlink-sdk) cloned on your build system
-* STEAMLINK_SDK_PATH environment variable set to the Steam Link SDK path
-
-**Steam Link Hardware Limitations**  
-Selene builds for Steam Link are subject to hardware limitations of the Steam Link device:
-* Maximum resolution: **1080p (1920x1080)**
-* Maximum framerate: **60 FPS**
-* Maximum video bitrate: **40 Mbps**
-* **HDR streaming is not supported** on the original hardware
-
 ### Docker containers
 If you want to use Docker for building, look at [this repo](https://github.com/cgutman/selene-packaging) containing canonical containers
 for different architectures, which handle building deps and extra linking for you.
@@ -90,7 +79,6 @@ for different architectures, which handle building deps and extra linking for yo
 1. Install the latest Qt SDK (and optionally, the Qt Creator IDE) from https://www.qt.io/download
     * You can install Qt via Homebrew on macOS, but you will need to use `brew install qt --with-debug` to be able to create debug builds of Selene.
     * You may also use your Linux distro's package manager for the Qt SDK as long as the packages are Qt 5.12 or later.
-    * This step is not required for building on Steam Link, because the Steam Link SDK includes Qt 5.14.
 2. Download submodules and dependencies
     * Run `git submodule update --init --recursive` from within `moonlight-qt/`.
     * On Windows and macOS, you must also run `setup-deps.ps1` (Windows) or `setup-deps.py` (macOS).
@@ -99,7 +87,6 @@ for different architectures, which handle building deps and extra linking for yo
     * To build a binary for use on non-development machines, use the scripts in the `scripts` folder.
         * For Windows builds, use `scripts\build-arch.bat` and `scripts\generate-bundle.bat`. Execute these scripts from the root of the repository within a Qt command prompt. Ensure  7-Zip binary directory is on your `%PATH%`.
         * For macOS builds, use `scripts/generate-dmg.sh`. Execute this script from the root of the repository and ensure Qt's `bin` folder is in your `$PATH`.
-        * For Steam Link builds, run `scripts/build-steamlink-app.sh` from the root of the repository.
     * To build from the command line for development use on macOS or Linux, run `qmake6 selene.pro` then `make debug` or `make release`.
         * The final binary will be placed in `app/selene`.
     * To create an embedded build for a single-purpose device, use `qmake6 "CONFIG+=embedded" selene.pro` and build normally.

@@ -13,8 +13,6 @@ def get_platform_config():
     system = platform.system()
     if system == "Darwin":
         return "mac", "macos-universal.zip"
-    if system == "Linux":
-        return "steamlink", "steamlink.zip"
 
     print(f"Error: Unsupported platform ({system})")
     sys.exit(1)

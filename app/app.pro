@@ -65,10 +65,7 @@ unix:if(!macx|disable-prebuilts) {
     CONFIG += link_pkgconfig
     PKGCONFIG += openssl sdl2 SDL2_ttf
 
-    # We have our own optimized libopus.a for Steam Link
-    if(!config_SL|disable-prebuilts) {
-        PKGCONFIG += opus
-    }
+    PKGCONFIG += opus
 
     !disable-ffmpeg {
         packagesExist(libavcodec) {
@@ -369,26 +366,6 @@ config_EGL {
     HEADERS += \
         streaming/video/ffmpeg-renderers/eglvid.h \
         streaming/video/ffmpeg-renderers/eglimagefactory.h
-}
-config_SL {
-    message(Steam Link build configuration selected)
-
-    !disable-prebuilts {
-        # Link against our NEON-optimized libopus build
-        LIBS += -L$$PWD/../libs/steamlink/lib
-        INCLUDEPATH += $$PWD/../libs/steamlink/include
-        LIBS += -lopus -larmasm -lNE10
-    }
-
-    DEFINES += EMBEDDED_BUILD STEAM_LINK HAVE_SLVIDEO HAVE_SLAUDIO
-    LIBS += -lSLVideo -lSLAudio
-
-    SOURCES += \
-        streaming/video/slvid.cpp \
-        streaming/audio/renderers/slaud.cpp
-    HEADERS += \
-        streaming/video/slvid.h \
-        streaming/audio/renderers/slaud.h
 }
 win32 {
     HEADERS += streaming/video/ffmpeg-renderers/dxutil.h
