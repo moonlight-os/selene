@@ -172,6 +172,9 @@ void SdlInputHandler::handleMouseMotionEvent(SDL_MouseMotionEvent* event)
 
 void SdlInputHandler::handleMouseWheelEvent(SDL_MouseWheelEvent* event)
 {
+    if (m_Panel != nullptr && m_Panel->handleMouseWheel(event)) {
+        return;
+    }
     if (!isCaptureActive()) {
         // Not capturing
         return;

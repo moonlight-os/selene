@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QRasterWindow>
 #include <QTimer>
+#include <QWheelEvent>
 
 #include "panelmodel.h"
 #include "panelpainter.h"
@@ -26,17 +27,19 @@ class PanelWindow : public QRasterWindow
     Q_OBJECT
 
 public:
-    PanelWindow();
+    explicit PanelWindow(PanelModel::Mode mode = PanelModel::Mode::ControlCentre);
 
     // False when there is no helper, i.e. this is not an appliance. The
     // caller should not show a window that can do nothing.
     bool isAvailable() const { return m_Model.isAvailable(); }
 
 protected:
+    void exposeEvent(QExposeEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     QPoint panelOrigin() const;

@@ -5,6 +5,7 @@ import QtQuick.Controls.Material 2.2
 import AppModel 1.0
 import ComputerManager 1.0
 import SdlGamepadKeyNavigation 1.0
+import SeleneTheme 1.0
 
 CenteredGridView {
     property int computerIndex
@@ -16,9 +17,9 @@ CenteredGridView {
     id: appGrid
     focus: true
     activeFocusOnTab: true
-    topMargin: 20
-    bottomMargin: 5
-    cellWidth: 230; cellHeight: 297;
+    topMargin: 26
+    bottomMargin: 18
+    cellWidth: 240; cellHeight: 320;
 
     function computerLost()
     {
@@ -71,7 +72,7 @@ CenteredGridView {
     model: appModel
 
     delegate: NavigableItemDelegate {
-        width: 220; height: 287;
+        width: 230; height: 310;
         grid: appGrid
 
         property alias appContextMenu: appContextMenuLoader.item
@@ -85,7 +86,7 @@ CenteredGridView {
 
             id: appIcon
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 10
+            y: 12
             source: model.boxart
 
             onSourceSizeChanged: {
@@ -105,8 +106,8 @@ CenteredGridView {
                     isPlaceholder = false
                 }
 
-                width = 200
-                height = 267
+                width = 198
+                height = 264
             }
 
             // Display a tooltip with the full name if it's truncated
@@ -145,7 +146,7 @@ CenteredGridView {
                     ToolTip.timeout: 3000
                     ToolTip.visible: hovered
 
-                    Material.background: "#D0808080"
+                    Material.background: SeleneTheme.surface
                 }
 
                 RoundButton {
@@ -171,14 +172,14 @@ CenteredGridView {
                     ToolTip.timeout: 3000
                     ToolTip.visible: hovered
 
-                    Material.background: "#D0808080"
+                    Material.background: SeleneTheme.surface
                 }
             }
         }
 
         Loader {
             id: appNameTextLoader
-            active: appIcon.isPlaceholder
+            active: false
 
             // This loader is not asynchronous to avoid noticeable differences
             // in the time in which the text loads for each game.
@@ -199,6 +200,34 @@ CenteredGridView {
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
+                elide: Text.ElideRight
+            }
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+            anchors.bottomMargin: 12
+            height: 48
+            radius: 12
+            color: SeleneTheme.surface
+            opacity: 0.96
+            border.width: 1
+            border.color: model.running ? SeleneTheme.success : SeleneTheme.border
+
+            Label {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                text: model.name
+                color: SeleneTheme.text
+                font.pointSize: 11
+                font.weight: Font.DemiBold
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
         }
@@ -340,6 +369,7 @@ CenteredGridView {
         Label {
             text: qsTr("This computer doesn't seem to have any applications or some applications are hidden")
             font.pointSize: 20
+            color: SeleneTheme.muted
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
         }

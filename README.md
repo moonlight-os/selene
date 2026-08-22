@@ -1,14 +1,11 @@
-# Selene PC
+# Selene
 
-[Selene PC](https://moonlight-stream.org) is an open source PC client for NVIDIA GameStream and [Sunshine](https://github.com/LizardByte/Sunshine).
+Selene is the Moonlight OS streaming client for Windows, macOS, and Linux. It
+connects to Helios and other Moonlight-compatible hosts, while adding native
+Moonlight OS transport, appliance setup, multi-display, USB, microphone,
+camera, and read-only system-disk integration.
 
-Selene also has mobile versions for [Android](https://github.com/moonlight-stream/selene-android) and [iOS](https://github.com/moonlight-stream/selene-ios).
-
-You can follow development on our [Discord server](https://moonlight-stream.org/discord) and help translate Selene into your language on [Weblate](https://hosted.weblate.org/projects/selene/moonlight-qt/).
-
- [![Build](https://img.shields.io/github/actions/workflow/status/moonlight-stream/moonlight-qt/build.yml?branch=master)](https://github.com/moonlight-stream/moonlight-qt/actions/workflows/build.yml?query=branch%3Amaster)
- [![Downloads](https://img.shields.io/github/downloads/moonlight-stream/moonlight-qt/total)](https://github.com/moonlight-stream/moonlight-qt/releases)
- [![Translation Status](https://hosted.weblate.org/widgets/selene/-/moonlight-qt/svg-badge.svg)](https://hosted.weblate.org/projects/selene/moonlight-qt/)
+[Source, issues, and releases](https://github.com/moonlight-os/selene)
 
 ## Features
  - Hardware accelerated video decoding on Windows, Mac, and Linux
@@ -20,19 +17,21 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Gamepad support with force feedback and motion controls for up to 16 players
  - Support for both pointer capture (for games) and direct mouse control (for remote desktop)
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
+ - An accessible, keyboard/gamepad/pointer control centre on Moonlight OS
+ - Authenticated QUIC transport with compatibility fallback
  
 ## Downloads
-- [Windows and macOS](https://github.com/moonlight-stream/moonlight-qt/releases)
+- [Moonlight OS Selene releases](https://github.com/moonlight-os/selene/releases)
 - [Snap (for Ubuntu-based Linux distros)](https://snapcraft.io/selene)
 - [Flatpak (for other Linux distros)](https://flathub.org/apps/details/dev.mopigames.Selene)
-- [AppImage](https://github.com/moonlight-stream/moonlight-qt/releases)
+- [AppImage](https://github.com/moonlight-os/selene/releases)
 - [Raspberry Pi 4 and 5](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-Raspberry-Pi-4)
 - [Generic ARM 32-bit and 64-bit Debian packages](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-ARM%E2%80%90based-Single-Board-Computers) (not for Raspberry Pi)
 - [Experimental RISC-V Debian packages](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-RISC%E2%80%90V-Single-Board-Computers)
 - [NVIDIA Jetson and Nintendo Switch (Ubuntu L4T)](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-Linux4Tegra-(L4T)-Ubuntu)
 
-### Nightly Builds
-- [Downloads](https://nightly.link/moonlight-stream/moonlight-qt/workflows/build/master)
+### Development builds
+- [GitHub Actions](https://github.com/moonlight-os/selene/actions)
 
 #### Special Thanks
 

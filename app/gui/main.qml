@@ -9,6 +9,7 @@ import AutoUpdateChecker 1.0
 import StreamingPreferences 1.0
 import SystemProperties 1.0
 import SdlGamepadKeyNavigation 1.0
+import SeleneTheme 1.0
 
 ApplicationWindow {
     property bool pollingActive: false
@@ -21,16 +22,16 @@ ApplicationWindow {
     id: window
     width: 1280
     height: 600
+    color: SeleneTheme.backdrop
+
+    Material.theme: SeleneTheme.dark ? Material.Dark : Material.Light
+    Material.primary: SeleneTheme.surface
+    Material.accent: SeleneTheme.accent
+    Material.background: SeleneTheme.backdrop
+    Material.foreground: SeleneTheme.text
 
     // This function runs prior to creation of the initial StackView item
     function doEarlyInit() {
-        // Override the background color to Material 2 colors for Qt 6.5+
-        // in order to improve contrast between GFE's placeholder box art
-        // and the background of the app grid.
-        if (SystemProperties.usesMaterial3Theme) {
-            Material.background = "#303030"
-        }
-
         SdlGamepadKeyNavigation.enable()
     }
 
@@ -104,6 +105,10 @@ ApplicationWindow {
         else {
             stackView.pop()
         }
+    }
+
+    OrbitBackdrop {
+        anchors.fill: parent
     }
 
     StackView {
@@ -235,26 +240,54 @@ ApplicationWindow {
 
     header: ToolBar {
         id: toolBar
-        height: 60
+        height: 72
         anchors.topMargin: 5
         anchors.bottomMargin: 5
+
+        background: Rectangle {
+            color: SeleneTheme.surface
+            border.color: SeleneTheme.border
+            border.width: 1
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 2
+                color: SeleneTheme.accent
+                opacity: 0.58
+            }
+        }
 
         Label {
             id: titleLabel
             visible: toolBar.width > 700
             anchors.fill: parent
             text: stackView.currentItem.objectName
-            font.pointSize: 20
+            color: SeleneTheme.text
+            font.pointSize: 18
+            font.weight: Font.DemiBold
+            font.letterSpacing: 0.3
             elide: Label.ElideRight
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
         }
 
         RowLayout {
-            spacing: 10
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
+            spacing: 12
+            anchors.leftMargin: 18
+            anchors.rightMargin: 18
             anchors.fill: parent
+
+            Label {
+                visible: toolBar.width > 940
+                text: "SELENE"
+                color: SeleneTheme.accent
+                font.pointSize: 14
+                font.weight: Font.Black
+                font.letterSpacing: 3.2
+                Layout.rightMargin: 8
+            }
 
             NavigableToolButton {
                 // Only make the button visible if the user has navigated somewhere.
@@ -274,6 +307,7 @@ ApplicationWindow {
             Label {
                 id: titleRowLabel
                 font.pointSize: titleLabel.font.pointSize
+                color: SeleneTheme.text
                 elide: Label.ElideRight
                 horizontalAlignment: Qt.AlignHCenter
                 verticalAlignment: Qt.AlignVCenter
@@ -290,6 +324,7 @@ ApplicationWindow {
                 visible: stackView.currentItem instanceof SettingsView
                 text: qsTr("Version %1").arg(SystemProperties.versionString)
                 font.pointSize: 12
+                color: SeleneTheme.muted
                 horizontalAlignment: Qt.AlignRight
                 verticalAlignment: Qt.AlignVCenter
             }

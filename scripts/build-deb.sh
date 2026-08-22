@@ -15,6 +15,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SUITE="${MLOS_SUITE:-trixie}"
 IMAGE="selene-deb-builder:${SUITE}"
+MSQUIC_VERSION="2.5.9"
+MSQUIC_SHA256="5f2107d3b682cc008ec248e93bc4c00dc4ac674f2e1d4bd5c830bf2d1f1b60a1"
+MSQUIC_URL="https://packages.microsoft.com/debian/13/prod/pool/main/libm/libmsquic/libmsquic_${MSQUIC_VERSION}_amd64.deb"
 
 say() { printf '\033[1;35m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -38,11 +41,16 @@ mkdir -p "$HERE/dist"
 # dependency list has one source of truth rather than two.
 say "Building the package"
 docker run --rm --network host \
+	-e MSQUIC_SHA256="$MSQUIC_SHA256" \
+	-e MSQUIC_URL="$MSQUIC_URL" \
 	-v "$HERE:/src" \
 	-v "$HERE/dist:/dist" \
 	-w /src \
 	"$IMAGE" bash -euc '
 		apt-get update
+		curl -fL --retry 3 -o /tmp/libmsquic.deb "$MSQUIC_URL"
+		echo "$MSQUIC_SHA256  /tmp/libmsquic.deb" | sha256sum -c -
+		apt-get install -y --no-install-recommends /tmp/libmsquic.deb
 		mk-build-deps --install --remove \
 			--tool "apt-get -y --no-install-recommends" debian/control
 		# Build in a copy so the source tree keeps its submodules and stays clean.

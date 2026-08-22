@@ -4,10 +4,10 @@
 	<metadata_license>CC0-1.0</metadata_license>
 	<project_license>GPL-3.0+</project_license>
 	<name>Selene</name>
-	<summary>Stream games and other applications from another PC running Sunshine or GeForce Experience</summary>
+	<summary>Moonlight OS game-streaming client</summary>
 
 	<description>
-		<p>Selene can stream games and other applications from another PC with Sunshine or GeForce Experience software installed.</p>
+		<p>Selene streams games and applications from Helios and other Moonlight-compatible hosts.</p>
 		<p>Features include:</p>
 		<ul>
 			<li>Hardware accelerated video decoding with VAAPI, VDPAU, and Vulkan Video support</li>
@@ -20,14 +20,13 @@
 		</ul>
 	</description>
 
-	<url type="homepage">https://moonlight-stream.org</url>
-	<url type="bugtracker">https://github.com/moonlight-stream/moonlight-qt/issues</url>
-	<url type="help">https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide</url>
-	<url type="vcs-browser">https://github.com/moonlight-stream/moonlight-qt</url>
-	<developer id="org.moonlight-stream">
-		<name>Selene Game Streaming Team</name>
+	<url type="homepage">https://github.com/moonlight-os/selene</url>
+	<url type="bugtracker">https://github.com/moonlight-os/selene/issues</url>
+	<url type="help">https://github.com/moonlight-os/selene#readme</url>
+	<url type="vcs-browser">https://github.com/moonlight-os/selene</url>
+	<developer id="dev.mopigames">
+		<name>Moonlight OS contributors</name>
 	</developer>
-	<update_contact>cameron@moonlight-stream.org</update_contact>
 	<launchable type="desktop-id">dev.mopigames.Selene.desktop</launchable>
 	<provides>
 		<binary>selene</binary>

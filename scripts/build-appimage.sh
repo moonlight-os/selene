@@ -22,6 +22,7 @@ fi
 
 command -v qmake6 >/dev/null 2>&1 || fail "Unable to find 'qmake6' in your PATH!"
 command -v $LINUXDEPLOY >/dev/null 2>&1 || fail "Unable to find '$LINUXDEPLOY' in your PATH!"
+[ -f "$MSQUIC_LIBRARY" ] || fail "MSQUIC_LIBRARY must point to the pinned MsQuic runtime!"
 
 echo Cleaning output directories
 rm -rf $BUILD_FOLDER
@@ -46,7 +47,7 @@ pushd $BUILD_FOLDER
 # work even in X11. To avoid this, we will disable Wayland support for the AppImage.
 #
 # We disable DRM support because linuxdeploy doesn't bundle the appropriate libraries for Qt EGLFS.
-qmake6 $SOURCE_ROOT/selene.pro CONFIG+=disable-wayland CONFIG+=disable-libdrm PREFIX=$DEPLOY_FOLDER/usr DEFINES+=APP_IMAGE || fail "Qmake failed!"
+qmake6 $SOURCE_ROOT/selene.pro CONFIG+=disable-wayland CONFIG+=disable-libdrm PREFIX=$DEPLOY_FOLDER/usr DEFINES+=APP_IMAGE MSQUIC_LIBRARY="$MSQUIC_LIBRARY" || fail "Qmake failed!"
 popd
 
 echo Compiling Selene in $BUILD_CONFIG configuration
@@ -66,6 +67,7 @@ echo Creating AppImage
 pushd $INSTALLER_FOLDER
 VERSION=$VERSION $LINUXDEPLOY --appdir $DEPLOY_FOLDER \
   --library=/usr/local/lib/libSDL3.so.0 \
+  --library="$MSQUIC_LIBRARY" \
   --plugin qt --output appimage || fail "linuxdeploy failed!"
 popd
 

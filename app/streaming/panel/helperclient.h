@@ -3,8 +3,11 @@
 #include <QJsonObject>
 #include <QMutex>
 #include <QQueue>
+#include <QSet>
 #include <QString>
 #include <QThread>
+
+#include <atomic>
 
 // Talks to moonlight-helper, the appliance's privileged daemon.
 //
@@ -37,24 +40,27 @@ public:
     // from the SDL thread, so it never blocks.
     bool takeReply(QJsonObject& reply);
 
-    bool isAvailable() const { return m_Available; }
+    bool isAvailable() const { return m_Available.load(); }
 
     static constexpr const char* k_SocketPath = "/run/moonlight-os/helper.sock";
+    static constexpr qsizetype k_MaxReplyBytes = 1024 * 1024;
 
 protected:
     void run() override;
 
 private:
-    bool connectToHelper();
+    bool connectToHelper(bool reportMissing = true);
+    void connectionLost();
     bool sendLine(const QByteArray& line);
     bool readLine(QByteArray& line);
 
     int m_Socket;
-    bool m_Available;
+    std::atomic_bool m_Available;
 
     QMutex m_Lock;
     QQueue<QByteArray> m_Outbound;
     QQueue<QJsonObject> m_Inbound;
+    QSet<int> m_Outstanding;
     int m_NextId;
     bool m_Stopping;
 

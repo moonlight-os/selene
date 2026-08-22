@@ -2,6 +2,7 @@
 #include "renderers/renderer.h"
 
 #include "renderers/sdl.h"
+#include "microphone.h"
 
 #include <Limelight.h>
 
@@ -75,6 +76,11 @@ bool Session::initializeAudioRenderer()
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Audio stream has %d channels",
                 m_ActiveAudioConfig.channelCount);
+
+    m_MicrophoneCapturer = std::make_unique<MicrophoneCapturer>();
+    if (!m_MicrophoneCapturer->start()) {
+        m_MicrophoneCapturer.reset();
+    }
     return true;
 }
 
@@ -113,6 +119,9 @@ int Session::arInit(int /* audioConfiguration */,
                     const POPUS_MULTISTREAM_CONFIGURATION opusConfig,
                     void* /* arContext */, int /* arFlags */)
 {
+    if (s_ActiveSession->m_AudioDisabled) {
+        return 0;
+    }
     SDL_memcpy(&s_ActiveSession->m_OriginalAudioConfig, opusConfig, sizeof(*opusConfig));
     s_ActiveSession->initializeAudioRenderer();
     return 0;
@@ -120,10 +129,14 @@ int Session::arInit(int /* audioConfiguration */,
 
 void Session::arCleanup()
 {
+    s_ActiveSession->m_MicrophoneCapturer.reset();
+
     delete s_ActiveSession->m_AudioRenderer;
     s_ActiveSession->m_AudioRenderer = nullptr;
 
-    opus_multistream_decoder_destroy(s_ActiveSession->m_OpusDecoder);
+    if (s_ActiveSession->m_OpusDecoder != nullptr) {
+        opus_multistream_decoder_destroy(s_ActiveSession->m_OpusDecoder);
+    }
     s_ActiveSession->m_OpusDecoder = nullptr;
 }
 

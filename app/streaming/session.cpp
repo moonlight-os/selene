@@ -2,7 +2,16 @@
 #include "clipboard.h"
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
+#include "streaming/usbtunnelclient.h"
+#include "streaming/quictransport.h"
+#include "streaming/audio/microphone.h"
+#include "streaming/video/camera.h"
+#include "backend/identitymanager.h"
 #include "backend/richpresencemanager.h"
+
+#ifdef HAS_PANEL
+#include "streaming/panel/helperclient.h"
+#endif
 
 #include <Limelight.h>
 #include "SDL_compat.h"
@@ -27,11 +36,14 @@
 #define SDL_CODE_GAMECONTROLLER_SET_ADAPTIVE_TRIGGERS 105
 #define SDL_CODE_CLIPBOARD_REQUESTED 106
 #define SDL_CODE_CLIPBOARD_RECEIVED 107
+#define SDL_CODE_PROTOCOL_STATUS_CLEAR 108
 
 #include <openssl/rand.h>
 
 #include <QtEndian>
 #include <QCoreApplication>
+#include <QProcess>
+#include <QJsonArray>
 #include <QThreadPool>
 #include <QSvgRenderer>
 #include <QPainter>
@@ -62,7 +74,13 @@ CONNECTION_LISTENER_CALLBACKS Session::k_ConnCallbacks = {
     Session::clSetAdaptiveTriggers,
     Session::clClipboardOffer,
     Session::clClipboardRequest,
-    Session::clClipboardData
+    Session::clClipboardData,
+    Session::clUsbTunnelOpen,
+    Session::clUsbTunnelData,
+    Session::clUsbTunnelClose,
+    Session::clDiskTunnelOpen,
+    Session::clDiskTunnelData,
+    Session::clDiskTunnelClose
 };
 
 Session* Session::s_ActiveSession;
@@ -160,6 +178,10 @@ void Session::clLogMessage(const char* format, ...)
 
 void Session::clRumble(unsigned short controllerNumber, unsigned short lowFreqMotor, unsigned short highFreqMotor)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) {
+        return;
+    }
+
     // We push an event for the main thread to handle in order to properly synchronize
     // with the removal of game controllers that could result in our game controller
     // going away during this callback.
@@ -216,6 +238,10 @@ void Session::clSetHdrMode(bool enabled)
 
 void Session::clRumbleTriggers(uint16_t controllerNumber, uint16_t leftTrigger, uint16_t rightTrigger)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) {
+        return;
+    }
+
     // We push an event for the main thread to handle in order to properly synchronize
     // with the removal of game controllers that could result in our game controller
     // going away during this callback.
@@ -229,6 +255,10 @@ void Session::clRumbleTriggers(uint16_t controllerNumber, uint16_t leftTrigger, 
 
 void Session::clSetMotionEventState(uint16_t controllerNumber, uint8_t motionType, uint16_t reportRateHz)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) {
+        return;
+    }
+
     // We push an event for the main thread to handle in order to properly synchronize
     // with the removal of game controllers that could result in our game controller
     // going away during this callback.
@@ -242,6 +272,10 @@ void Session::clSetMotionEventState(uint16_t controllerNumber, uint8_t motionTyp
 
 void Session::clSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) {
+        return;
+    }
+
     // We push an event for the main thread to handle in order to properly synchronize
     // with the removal of game controllers that could result in our game controller
     // going away during this callback.
@@ -267,6 +301,7 @@ void Session::clSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g
 // client sends nothing until the host asks.
 void Session::clClipboardOffer(uint32_t seq, const uint16_t* formats, const uint32_t*, uint16_t formatCount)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) return;
     for (uint16_t i = 0; i < formatCount; i++) {
         if (formats[i] == ML_CLIPBOARD_FORMAT_TEXT_UTF8) {
             LiSendClipboardRequest(seq, ML_CLIPBOARD_FORMAT_TEXT_UTF8);
@@ -279,6 +314,7 @@ void Session::clClipboardOffer(uint32_t seq, const uint16_t* formats, const uint
 // bounce to the SDL thread and answer from there.
 void Session::clClipboardRequest(uint32_t seq, uint16_t format)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) return;
     if (format != ML_CLIPBOARD_FORMAT_TEXT_UTF8) {
         return;
     }
@@ -294,6 +330,7 @@ void Session::clClipboardRequest(uint32_t seq, uint16_t format)
 // is copied here and freed by the handler on the other side.
 void Session::clClipboardData(uint32_t, uint16_t format, const void* data, uint32_t length)
 {
+    if (s_ActiveSession->m_DisplayIndex != 0) return;
     if (format != ML_CLIPBOARD_FORMAT_TEXT_UTF8 || length == 0) {
         return;
     }
@@ -320,6 +357,73 @@ void Session::clClipboardData(uint32_t, uint16_t format, const void* data, uint3
     }
 }
 
+void Session::clUsbTunnelOpen(uint32_t tunnelId)
+{
+#ifdef HAS_PANEL
+    if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
+            s_ActiveSession->m_UsbTunnel != nullptr) {
+        s_ActiveSession->m_UsbTunnel->open(tunnelId);
+        return;
+    }
+#endif
+    LiSendUsbTunnelClose(tunnelId, ML_USB_TUNNEL_CLOSE_CONNECT_FAILED);
+}
+
+void Session::clUsbTunnelData(uint32_t tunnelId, const void* data, uint16_t length)
+{
+#ifdef HAS_PANEL
+    if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
+            s_ActiveSession->m_UsbTunnel != nullptr) {
+        s_ActiveSession->m_UsbTunnel->write(tunnelId, data, length);
+        return;
+    }
+#endif
+    Q_UNUSED(data);
+    Q_UNUSED(length);
+    LiSendUsbTunnelClose(tunnelId, ML_USB_TUNNEL_CLOSE_CONNECT_FAILED);
+}
+
+void Session::clUsbTunnelClose(uint32_t tunnelId, uint16_t reason)
+{
+#ifdef HAS_PANEL
+    if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
+            s_ActiveSession->m_UsbTunnel != nullptr) {
+        s_ActiveSession->m_UsbTunnel->close(tunnelId, reason);
+    }
+#else
+    Q_UNUSED(tunnelId);
+    Q_UNUSED(reason);
+#endif
+}
+
+void Session::clDiskTunnelOpen(uint32_t tunnelId)
+{
+    if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
+            s_ActiveSession->m_DiskTunnel != nullptr) {
+        s_ActiveSession->m_DiskTunnel->open(tunnelId);
+        return;
+    }
+    LiSendDiskTunnelClose(tunnelId, ML_USB_TUNNEL_CLOSE_CONNECT_FAILED);
+}
+
+void Session::clDiskTunnelData(uint32_t tunnelId, const void* data, uint16_t length)
+{
+    if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
+            s_ActiveSession->m_DiskTunnel != nullptr) {
+        s_ActiveSession->m_DiskTunnel->write(tunnelId, data, length);
+        return;
+    }
+    LiSendDiskTunnelClose(tunnelId, ML_USB_TUNNEL_CLOSE_CONNECT_FAILED);
+}
+
+void Session::clDiskTunnelClose(uint32_t tunnelId, uint16_t reason)
+{
+    if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
+            s_ActiveSession->m_DiskTunnel != nullptr) {
+        s_ActiveSession->m_DiskTunnel->close(tunnelId, reason);
+    }
+}
+
 
 // Notice a local copy and tell the host about it -- without sending anything.
 //
@@ -329,6 +433,7 @@ void Session::clClipboardData(uint32_t, uint16_t format, const void* data, uint3
 // the compositor rather than a memory read.
 void Session::pollLocalClipboard()
 {
+    if (m_DisplayIndex != 0) return;
     // Nothing to negotiate with. Checked every time rather than cached because
     // the answer only settles once the host has advertised.
     if (!LiGetPeerFeatureVersion(ML_FEATURE_CLIPBOARD)) {
@@ -375,6 +480,10 @@ void Session::pollLocalClipboard()
 }
 
 void Session::clSetAdaptiveTriggers(uint16_t controllerNumber, uint8_t eventFlags, uint8_t typeLeft, uint8_t typeRight, uint8_t *left, uint8_t *right){
+    if (s_ActiveSession->m_DisplayIndex != 0) {
+        return;
+    }
+
     // We push an event for the main thread to handle in order to properly synchronize
     // with the removal of game controllers that could result in our game controller
     // going away during this callback.
@@ -672,7 +781,8 @@ bool Session::populateDecoderProperties(SDL_Window* window)
     return true;
 }
 
-Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *preferences)
+Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *preferences,
+                 int displayIndex)
     : m_Preferences(preferences ? preferences : StreamingPreferences::get()),
       m_IsFullScreen(m_Preferences->windowMode != StreamingPreferences::WM_WINDOWED || !WMUtils::isRunningDesktopEnvironment()),
       m_Computer(computer),
@@ -680,13 +790,15 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_Window(nullptr),
       m_VideoDecoder(nullptr),
       m_DecoderLock(SDL_CreateMutex()),
-      m_AudioMuted(false),
+      m_AudioDisabled(displayIndex != 0),
+      m_AudioMuted(displayIndex != 0),
       m_QtWindow(nullptr),
       m_UnexpectedTermination(true), // Failure prior to streaming is unexpected
       m_InputHandler(nullptr),
       m_MouseEmulationRefCount(0),
       m_FlushingWindowEventsRef(0),
       m_ShouldExit(false),
+      m_DisplayIndex(displayIndex),
       m_AsyncConnectionSuccess(false),
       m_PortTestResults(0),
       m_OpusDecoder(nullptr),
@@ -694,6 +806,16 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_AudioSampleCount(0),
       m_DropAudioEndTime(0)
 {
+#ifdef HAS_PANEL
+    if (m_DisplayIndex == 0) {
+        m_UsbHelper = std::make_unique<HelperClient>();
+        m_DiskHelper = std::make_unique<HelperClient>();
+        m_UsbTunnel = std::make_unique<UsbTunnelClient>();
+        m_DiskTunnel = std::make_unique<UsbTunnelClient>(3260, ML_DISK_TUNNEL_MAX_CHUNK,
+                                                        LiSendDiskTunnelData,
+                                                        LiSendDiskTunnelClose);
+    }
+#endif
 }
 
 Session::~Session()
@@ -764,6 +886,7 @@ bool Session::initialize(QQuickWindow* qtWindow)
     SDL_StopTextInput();
 
     LiInitializeStreamConfiguration(&m_StreamConfig);
+    m_StreamConfig.displayIndex = (uint16_t)m_DisplayIndex;
     m_StreamConfig.width = m_Preferences->width;
     m_StreamConfig.height = m_Preferences->height;
 
@@ -1395,7 +1518,18 @@ private:
         SDL_assert(m_Session->m_VideoDecoder == nullptr);
 
         // Finish cleanup of the connection state
+        m_Session->m_CameraCapturer.reset();
         LiStopConnection();
+#ifdef HAS_PANEL
+        if (m_Session->m_DiskTunnel != nullptr) {
+            m_Session->m_DiskTunnel->closeAll();
+        }
+#endif
+        LiSetTransportProxy(nullptr);
+        if (m_Session->m_QuicTransport) {
+            m_Session->m_QuicTransport->stop();
+            m_Session->m_QuicTransport.reset();
+        }
 
         // Perform a best-effort app quit
         if (shouldQuit) {
@@ -1424,7 +1558,7 @@ private:
 void Session::getWindowDimensions(int& x, int& y,
                                   int& width, int& height)
 {
-    int displayIndex = 0;
+    int displayIndex = m_DisplayIndex < SDL_GetNumVideoDisplays() ? m_DisplayIndex : 0;
 
     if (m_Window != nullptr) {
         displayIndex = SDL_GetWindowDisplayIndex(m_Window);
@@ -1432,7 +1566,7 @@ void Session::getWindowDimensions(int& x, int& y,
     }
     // Create our window on the same display that Qt's UI
     // was being displayed on.
-    else {
+    else if (m_DisplayIndex == 0) {
         Q_ASSERT(m_QtWindow != nullptr);
         if (m_QtWindow != nullptr) {
             QScreen* screen = m_QtWindow->screen();
@@ -1722,7 +1856,7 @@ bool Session::startConnectionAsync()
                       m_App.id, &m_StreamConfig,
                       enableGameOptimizations,
                       m_Preferences->playAudioOnHost,
-                      m_InputHandler->getAttachedGamepadMask(),
+                      m_DisplayIndex == 0 ? m_InputHandler->getAttachedGamepadMask() : 0,
                       !m_Preferences->multiController,
                       rtspSessionUrl);
     } catch (const GfeHttpResponseException& e) {
@@ -1736,7 +1870,44 @@ bool Session::startConnectionAsync()
     QByteArray hostnameStr = m_Computer->activeAddress.address().toUtf8();
     QByteArray siAppVersion = m_Computer->appVersion.toUtf8();
 
+    const QuicSessionInfo quicSession = QuicTransport::parseSessionUrl(rtspSessionUrl);
+    if (quicSession.isValid()) {
+        m_QuicTransport = std::make_unique<QuicTransport>();
+        QuicTransport::ProxyPorts proxyPorts;
+        if (!m_QuicTransport->start(quicSession, m_Computer->serverCert.toPem(),
+                                    IdentityManager::get()->getCertificate(),
+                                    IdentityManager::get()->getPrivateKey(), proxyPorts)) {
+            m_QuicTransport.reset();
+            emit displayLaunchError(tr("The host selected Moonlight OS QUIC, but the secure transport could not be established."));
+            return false;
+        }
+
+        const ML_TRANSPORT_PROXY_CONFIG proxyConfig {
+            proxyPorts.video,
+            proxyPorts.control,
+            proxyPorts.audio,
+            proxyPorts.microphone,
+            proxyPorts.camera
+        };
+        if (LiSetTransportProxy(&proxyConfig) != 0) {
+            m_QuicTransport->stop();
+            m_QuicTransport.reset();
+            emit displayLaunchError(tr("The local Moonlight OS QUIC proxy configuration is invalid."));
+            return false;
+        }
+
+        hostnameStr = QByteArrayLiteral("127.0.0.1");
+        rtspSessionUrl = QStringLiteral("rtspenc://127.0.0.1:%1").arg(proxyPorts.rtsp);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Using authenticated Moonlight OS QUIC transport on local proxy port %u",
+                    proxyPorts.rtsp);
+    }
+    else {
+        LiSetTransportProxy(nullptr);
+    }
+
     SERVER_INFORMATION hostInfo;
+    LiInitializeServerInformation(&hostInfo);
     hostInfo.address = hostnameStr.data();
     hostInfo.serverInfoAppVersion = siAppVersion.data();
     hostInfo.serverCodecModeSupport = m_Computer->serverCodecModeSupport;
@@ -1813,12 +1984,52 @@ bool Session::startConnectionAsync()
                                 &m_VideoCallbacks, &m_AudioCallbacks,
                                 NULL, 0, NULL, 0);
     if (err != 0) {
+        LiSetTransportProxy(nullptr);
+        if (m_QuicTransport) {
+            m_QuicTransport->stop();
+            m_QuicTransport.reset();
+        }
         // We already displayed an error dialog in the stage failure
         // listener.
         return false;
     }
 
-    sendKeyboardLayout();
+    if (m_DisplayIndex == 0) {
+        sendKeyboardLayout();
+        sendDisplayTopology();
+        pollUsbDevices();
+        pollSystemDisk();
+
+        m_CameraCapturer = std::make_unique<CameraCapturer>();
+        if (!m_CameraCapturer->start()) {
+            m_CameraCapturer.reset();
+        }
+        if (LiGetPeerFeatureVersion(ML_FEATURE_DISPLAY_TOPOLOGY)) {
+            QMetaObject::invokeMethod(this, [this]() {
+                startAuxiliaryDisplaySessions();
+            }, Qt::QueuedConnection);
+        }
+    }
+
+    if (m_DisplayIndex == 0 &&
+            !LiGetPeerFeatureVersion(ML_FEATURE_CLIPBOARD) &&
+            !LiGetPeerFeatureVersion(ML_FEATURE_USB_PASSTHROUGH) &&
+            !LiGetPeerFeatureVersion(ML_FEATURE_MICROPHONE) &&
+            !LiGetPeerFeatureVersion(ML_FEATURE_CAMERA) &&
+            !LiGetPeerFeatureVersion(ML_FEATURE_DISPLAY_TOPOLOGY) &&
+            !LiGetPeerFeatureVersion(ML_FEATURE_SYSTEM_DISK)) {
+        m_OverlayManager.updateOverlayText(
+            Overlay::OverlayStatusUpdate,
+            "Connected in compatibility mode\nMoonlight OS extras are unavailable");
+        m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, true);
+        SDL_AddTimer(5000, [](Uint32, void*) -> Uint32 {
+            SDL_Event event = {};
+            event.type = SDL_USEREVENT;
+            event.user.code = SDL_CODE_PROTOCOL_STATUS_CLEAR;
+            SDL_PushEvent(&event);
+            return 0;
+        }, nullptr);
+    }
 
     emit connectionStarted();
     return true;
@@ -1857,6 +2068,302 @@ void Session::sendKeyboardLayout()
                     variant.isEmpty() ? "" : "/",
                     variant.isEmpty() ? "" : variant.constData());
     }
+}
+
+void Session::sendDisplayTopology()
+{
+    if (m_DisplayIndex != 0) return;
+    if (!LiGetPeerFeatureVersion(ML_FEATURE_DISPLAY_TOPOLOGY)) {
+        return;
+    }
+
+    int count = SDL_GetNumVideoDisplays();
+    if (count <= 0) {
+        return;
+    }
+    count = qMin(count, 16);
+
+    QVector<ML_DISPLAY_DESC> displays;
+    displays.reserve(count);
+    const auto screens = QGuiApplication::screens();
+    QScreen* primary = QGuiApplication::primaryScreen();
+    int primaryIndex = -1;
+
+    for (int i = 0; i < count; ++i) {
+        SDL_Rect bounds;
+        SDL_DisplayMode mode;
+        if (SDL_GetDisplayBounds(i, &bounds) != 0 ||
+                SDL_GetDesktopDisplayMode(i, &mode) != 0 ||
+                mode.w <= 0 || mode.h <= 0) {
+            continue;
+        }
+
+        QScreen* screen = nullptr;
+        for (QScreen* candidate : screens) {
+            if (candidate->geometry().x() == bounds.x && candidate->geometry().y() == bounds.y) {
+                screen = candidate;
+                break;
+            }
+        }
+
+        ML_DISPLAY_DESC display = {};
+        display.x = bounds.x;
+        display.y = bounds.y;
+        display.width = (uint32_t)mode.w;
+        display.height = (uint32_t)mode.h;
+        display.refreshRate = (uint32_t)qBound(1000.0,
+            mode.refresh_rate > 0 ? mode.refresh_rate * 1000.0 : 60000.0, 1000000.0);
+        display.scale = screen != nullptr ?
+            (uint32_t)qBound(250.0, screen->devicePixelRatio() * 1000.0, 8000.0) : 1000;
+        if (screen != nullptr) {
+            QSizeF physical = screen->physicalSize();
+            display.physicalWidthMm = (uint16_t)qBound(0.0, physical.width(), 65535.0);
+            display.physicalHeightMm = (uint16_t)qBound(0.0, physical.height(), 65535.0);
+            if (screen == primary && primaryIndex < 0) {
+                display.flags |= ML_DISPLAY_FLAG_PRIMARY;
+                primaryIndex = displays.size();
+            }
+        }
+        displays.append(display);
+    }
+
+    // Mirrored displays can share the same geometry, while Qt and SDL may
+    // temporarily disagree about screen identity during hotplug. The wire
+    // protocol requires exactly one primary, so use the first valid display
+    // when no unambiguous Qt primary match was found.
+    if (!displays.isEmpty() && primaryIndex < 0) {
+        displays[0].flags |= ML_DISPLAY_FLAG_PRIMARY;
+    }
+
+    if (!displays.isEmpty() &&
+            LiSendDisplayTopology(++m_DisplayTopologyGeneration,
+                                  displays.constData(), (uint16_t)displays.size()) == 0) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Told the host about %d client display(s), generation %u",
+                    (int)displays.size(), m_DisplayTopologyGeneration);
+    }
+}
+
+void Session::startAuxiliaryDisplaySessions()
+{
+    if (m_DisplayIndex != 0 || !m_AuxiliaryDisplayProcesses.isEmpty()) {
+        return;
+    }
+
+    int count = qMin(SDL_GetNumVideoDisplays(), 16);
+    for (int index = 1; index < count; ++index) {
+        SDL_DisplayMode mode;
+        if (SDL_GetDesktopDisplayMode(index, &mode) != 0 || mode.w <= 0 || mode.h <= 0) {
+            continue;
+        }
+
+        QStringList arguments {
+            "stream",
+            m_Computer->uuid,
+            m_App.name,
+            QString("--display-index=%1").arg(index),
+            QString("--resolution=%1x%2").arg(mode.w).arg(mode.h),
+            QString("--fps=%1").arg(mode.refresh_rate > 0 ? mode.refresh_rate : 60),
+            "--no-quit-after",
+        };
+
+        auto process = new QProcess(this);
+        process->setProgram(QCoreApplication::applicationFilePath());
+        process->setArguments(arguments);
+        process->start();
+        if (!process->waitForStarted(5000)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "Failed to start display %d stream process: %s",
+                         index, qUtf8Printable(process->errorString()));
+            process->deleteLater();
+            continue;
+        }
+        m_AuxiliaryDisplayProcesses.append(process);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Started independent stream process for client display %d", index);
+    }
+}
+
+void Session::stopAuxiliaryDisplaySessions()
+{
+    for (QProcess* process : std::as_const(m_AuxiliaryDisplayProcesses)) {
+        if (process->state() != QProcess::NotRunning) {
+            process->terminate();
+            if (!process->waitForFinished(3000)) {
+                process->kill();
+                process->waitForFinished(1000);
+            }
+        }
+        process->deleteLater();
+    }
+    m_AuxiliaryDisplayProcesses.clear();
+}
+
+void Session::pollUsbDevices()
+{
+    if (m_DisplayIndex != 0) return;
+#ifdef HAS_PANEL
+    if (!LiGetPeerFeatureVersion(ML_FEATURE_USB_PASSTHROUGH) ||
+            m_UsbHelper == nullptr || !m_UsbHelper->isAvailable()) {
+        return;
+    }
+
+    uint32_t now = SDL_GetTicks();
+    QJsonObject reply;
+    while (m_UsbHelper->takeReply(reply)) {
+        if (reply.value("id").toInt() != m_UsbRequest) {
+            continue;
+        }
+        if (reply.value("event").toString() == QLatin1String("progress")) {
+            continue;
+        }
+        m_UsbRequest = 0;
+
+        if (!reply.value("ok").toBool()) {
+            auto error = reply.value("error").toObject();
+            auto message = error.value("message").toString();
+            if (message != m_LastUsbError) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Could not reconcile the appliance USB export lease: %s",
+                            qUtf8Printable(message));
+                m_LastUsbError = message;
+            }
+            continue;
+        }
+
+        auto result = reply.value("result").toObject();
+        auto helperMessage = result.value("message").toString();
+        if (helperMessage != m_LastUsbError) {
+            if (!helperMessage.isEmpty()) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "USB export lease needs attention: %s",
+                            qUtf8Printable(helperMessage));
+            }
+            m_LastUsbError = helperMessage;
+        }
+
+        auto objects = result.value("devices").toArray();
+        QVector<QByteArray> busids;
+        QVector<QByteArray> hwids;
+        QVector<QByteArray> labels;
+        QByteArray fingerprint;
+
+        for (const auto& value : objects) {
+            auto object = value.toObject();
+            if (!object.value("shared").toBool()) {
+                continue;
+            }
+            QByteArray busid = object.value("busid").toString().toUtf8();
+            if (busid.isEmpty()) {
+                continue;
+            }
+            busids.append(busid);
+            hwids.append(object.value("hwid").toString().toUtf8());
+            labels.append(object.value("label").toString().toUtf8());
+            fingerprint.append(busids.last()).append('\0');
+            fingerprint.append(hwids.last()).append('\0');
+            fingerprint.append(labels.last()).append('\0');
+        }
+
+        // A heartbeat repairs state if the host-side backend restarts while
+        // the stream remains up. Otherwise only hotplug changes cross.
+        if (m_UsbGeneration != 0 && fingerprint == m_LastUsbOffer &&
+                now - m_LastUsbSentTicks < 60000) {
+            continue;
+        }
+
+        QVector<ML_USB_DEVICE> devices;
+        devices.reserve(busids.size());
+        for (int i = 0; i < busids.size(); ++i) {
+            devices.append({busids[i].constData(), hwids[i].constData(), labels[i].constData()});
+        }
+
+        if (LiSendUsbDeviceSync(++m_UsbGeneration,
+                                devices.isEmpty() ? nullptr : devices.constData(),
+                                (uint16_t)devices.size()) == 0) {
+            m_LastUsbOffer = fingerprint;
+            m_LastUsbSentTicks = now;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Offered %lld exported USB device(s) to the host, generation %u",
+                        static_cast<long long>(devices.size()), m_UsbGeneration);
+        }
+    }
+
+    // A full sysfs survey is deliberately slower than the event loop. Two
+    // seconds keeps hotplug responsive without taxing the appliance's Atom.
+    if (m_UsbRequest == 0 && now - m_LastUsbPollTicks >= 2000) {
+        // This dedicated helper connection is also the lifetime of the
+        // appliance-side export lease. The helper binds policy-approved
+        // devices for the native session and releases only those devices
+        // when this connection closes; the panel's ordinary usb.list must
+        // remain read-only.
+        m_UsbRequest = m_UsbHelper->request(QStringLiteral("usb.session.sync"));
+        m_LastUsbPollTicks = now;
+    }
+#endif
+}
+
+void Session::pollSystemDisk()
+{
+    if (m_DisplayIndex != 0) return;
+#ifdef HAS_PANEL
+    if (!LiGetPeerFeatureVersion(ML_FEATURE_SYSTEM_DISK) || m_DiskHelper == nullptr) {
+        return;
+    }
+
+    uint32_t now = SDL_GetTicks();
+    if (!m_DiskHelper->isAvailable()) {
+        // The helper connection owns the appliance-side target. If it dies,
+        // withdraw immediately rather than leaving the host with a dead disk.
+        if (m_DiskGeneration != 0 && !m_LastDiskOffer.isEmpty()) {
+            if (LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0) == 0) {
+                m_LastDiskOffer.clear();
+            }
+        }
+        return;
+    }
+
+    QJsonObject reply;
+    while (m_DiskHelper->takeReply(reply)) {
+        if (reply.value("id").toInt() != m_DiskRequest) continue;
+        if (reply.value("event").toString() == QLatin1String("progress")) continue;
+        m_DiskRequest = 0;
+
+        if (!reply.value("ok").toBool()) {
+            auto message = reply.value("error").toObject().value("message").toString();
+            if (message != m_LastDiskError) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Could not acquire the read-only system disk lease: %s",
+                            qUtf8Printable(message));
+                m_LastDiskError = message;
+            }
+            continue;
+        }
+
+        auto result = reply.value("result").toObject();
+        QByteArray iqn = result.value("iqn").toString().toUtf8();
+        uint64_t size = (uint64_t)result.value("size").toDouble();
+        uint32_t sectorSize = (uint32_t)result.value("sector_size").toInt();
+        QByteArray fingerprint = iqn + '\0' +
+                                 QByteArray::number(static_cast<qulonglong>(size)) + '\0' +
+                                 QByteArray::number(static_cast<qulonglong>(sectorSize));
+        if (fingerprint == m_LastDiskOffer) continue;
+
+        if (LiSendSystemDiskOffer(++m_DiskGeneration, iqn.constData(), size, sectorSize) == 0) {
+            m_LastDiskOffer = fingerprint;
+            m_LastDiskError.clear();
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Offered the %llu-byte read-only Moonlight OS disk to the host, generation %u",
+                        (unsigned long long)size, m_DiskGeneration);
+        }
+    }
+
+    // This heartbeat also reacquires the exact target after a helper restart.
+    if (m_DiskRequest == 0 && now - m_LastDiskPollTicks >= 2000) {
+        m_DiskRequest = m_DiskHelper->request(QStringLiteral("disk.session.acquire"));
+        m_LastDiskPollTicks = now;
+    }
+#endif
 }
 
 void Session::flushWindowEvents()
@@ -2099,6 +2606,7 @@ void Session::exec()
     // Hijack this thread to be the SDL main thread. We have to do this
     // because we want to suspend all Qt processing until the stream is over.
     SDL_Event event;
+    Uint32 lastLocalPoll = SDL_GetTicks();
     for (;;) {
 #if SDL_VERSION_ATLEAST(2, 0, 18)
         // SDL 2.0.18 has a proper wait event implementation that uses platform
@@ -2112,7 +2620,10 @@ void Session::exec()
         if (!SDL_WaitEventTimeout(&event, 1000)) {
             presence.runCallbacks();
             pollLocalClipboard();
+            pollUsbDevices();
+            pollSystemDisk();
             m_InputHandler->pollPanel();
+            lastLocalPoll = SDL_GetTicks();
             continue;
         }
 #else
@@ -2124,10 +2635,58 @@ void Session::exec()
             SDL_Delay(1);
             presence.runCallbacks();
             pollLocalClipboard();
+            pollUsbDevices();
+            pollSystemDisk();
             m_InputHandler->pollPanel();
+            lastLocalPoll = SDL_GetTicks();
             continue;
         }
 #endif
+
+        // A live stream produces frame and input events continuously, so the
+        // wait above may never time out. Polling local integrations only in
+        // its timeout path left helper replies queued forever, an open panel
+        // stuck on its loading skeleton, and clipboard/USB changes unseen.
+        // Keep them responsive without doing the work for every video frame.
+        Uint32 now = SDL_GetTicks();
+        if (now - lastLocalPoll >= 250) {
+            pollLocalClipboard();
+            pollUsbDevices();
+            pollSystemDisk();
+            m_InputHandler->pollPanel();
+            lastLocalPoll = now;
+        }
+
+        if (m_DisplayIndex != 0) {
+            // Each indexed stream has its own Helios input viewport, so
+            // keyboard, pointer, and touch events must be sent by the window
+            // that actually owns focus. Controllers are process-global in
+            // SDL, however, and every auxiliary process would otherwise send
+            // the same physical gamepad state a second time. Keep gamepad
+            // ownership on the primary stream while allowing cursor/input
+            // hand-off across the client desktop.
+            switch (event.type) {
+            case SDL_CONTROLLERAXISMOTION:
+            case SDL_CONTROLLERBUTTONDOWN:
+            case SDL_CONTROLLERBUTTONUP:
+            case SDL_CONTROLLERDEVICEADDED:
+            case SDL_CONTROLLERDEVICEREMOVED:
+            case SDL_JOYDEVICEADDED:
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+            case SDL_CONTROLLERSENSORUPDATE:
+            case SDL_CONTROLLERTOUCHPADDOWN:
+            case SDL_CONTROLLERTOUCHPADUP:
+            case SDL_CONTROLLERTOUCHPADMOTION:
+#endif
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+            case SDL_JOYBATTERYUPDATED:
+#endif
+                continue;
+            default:
+                break;
+            }
+        }
+
         switch (event.type) {
         case SDL_TEXTINPUT:
             // Only ever wanted by the panel. Streaming itself sends
@@ -2205,6 +2764,9 @@ void Session::exec()
                 free(text);
                 break;
             }
+            case SDL_CODE_PROTOCOL_STATUS_CLEAR:
+                m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, false);
+                break;
             default:
                 SDL_assert(false);
             }
@@ -2466,10 +3028,16 @@ void Session::exec()
             m_InputHandler->handleTouchFingerEvent(&event.tfinger);
             break;
         case SDL_DISPLAYEVENT:
+            sendDisplayTopology();
             switch (event.display.event) {
             case SDL_DISPLAYEVENT_CONNECTED:
             case SDL_DISPLAYEVENT_DISCONNECTED:
                 m_InputHandler->updatePointerRegionLock();
+                if (m_DisplayIndex == 0 &&
+                        LiGetPeerFeatureVersion(ML_FEATURE_DISPLAY_TOPOLOGY)) {
+                    stopAuxiliaryDisplaySessions();
+                    startAuxiliaryDisplaySessions();
+                }
                 break;
             }
             break;
@@ -2477,6 +3045,28 @@ void Session::exec()
     }
 
 DispatchDeferredCleanup:
+    stopAuxiliaryDisplaySessions();
+#ifdef HAS_PANEL
+    if (m_UsbTunnel != nullptr) {
+        m_UsbTunnel->closeAll();
+    }
+#endif
+
+    // Declarative ownership: withdraw the complete USB set while the control
+    // connection can still carry it. Keep the system-disk tunnel alive until
+    // LiStopConnection() has flushed this withdrawal: Windows must be able to
+    // log out the iSCSI session before the appliance releases its target.
+    // Helios also detaches on connection loss, so a hard crash remains safe.
+#ifdef HAS_PANEL
+    if (LiGetPeerFeatureVersion(ML_FEATURE_USB_PASSTHROUGH) && m_UsbGeneration != 0) {
+        LiSendUsbDeviceSync(++m_UsbGeneration, nullptr, 0);
+    }
+    if (LiGetPeerFeatureVersion(ML_FEATURE_SYSTEM_DISK) && m_DiskGeneration != 0) {
+        LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0);
+        m_LastDiskOffer.clear();
+    }
+#endif
+
     // Switch back to synchronous logging mode
     StreamUtils::exitAsyncLoggingMode();
 

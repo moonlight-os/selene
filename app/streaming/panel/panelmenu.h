@@ -51,6 +51,7 @@ public:
     // never also reaches the host -- clicking a menu row must not shoot.
     bool handleMouseMotion(int x, int y);
     bool handleMouseButton(const SDL_MouseButtonEvent* event);
+    bool handleMouseWheel(const SDL_MouseWheelEvent* event);
 
     // Typed characters, which only matter while the panel is asking for
     // something. Selene otherwise has no use for SDL text input at all: it
@@ -79,6 +80,7 @@ private:
     PanelModel m_Model;
     PanelPainter m_Painter;
     bool m_Open;
+    bool m_HotkeyClaimed;
     SDL_Window* m_Window;
     int m_StreamWidth;
     int m_StreamHeight;

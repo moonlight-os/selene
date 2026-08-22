@@ -7,6 +7,7 @@ import StreamingPreferences 1.0
 import ComputerManager 1.0
 import SdlGamepadKeyNavigation 1.0
 import SystemProperties 1.0
+import SeleneTheme 1.0
 
 Flickable {
     id: settingsPage
@@ -100,10 +101,62 @@ Flickable {
         spacing: 15
 
         GroupBox {
+            width: (parent.width - (parent.leftPadding + parent.rightPadding))
+            padding: 14
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Appearance") + "</font>"
+            font.pointSize: 12
+
+            Column {
+                anchors.fill: parent
+                spacing: 10
+
+                Label {
+                    width: parent.width
+                    text: qsTr("Theme")
+                    color: SeleneTheme.text
+                    font.pointSize: 12
+                    font.weight: Font.DemiBold
+                }
+
+                Label {
+                    width: parent.width
+                    text: qsTr("Choose the atmosphere used by the launcher, settings, dialogs, and in-stream controls.")
+                    color: SeleneTheme.muted
+                    font.pointSize: 9
+                    wrapMode: Text.Wrap
+                }
+
+                AutoResizingComboBox {
+                    id: themeComboBox
+                    width: 220
+                    model: SeleneTheme.themeNames
+                    currentIndex: SeleneTheme.currentThemeIndex
+                    onActivated: SeleneTheme.selectThemeAt(index)
+                }
+
+                Row {
+                    spacing: 8
+                    Repeater {
+                        model: [SeleneTheme.backdrop, SeleneTheme.surface, SeleneTheme.accent,
+                                SeleneTheme.success, SeleneTheme.danger]
+                        Rectangle {
+                            width: 30
+                            height: 30
+                            radius: 15
+                            color: modelData
+                            border.width: 1
+                            border.color: SeleneTheme.border
+                        }
+                    }
+                }
+            }
+        }
+
+        GroupBox {
             id: basicSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("Basic Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Streaming") + "</font>"
             font.pointSize: 12
 
             Column {
@@ -879,7 +932,7 @@ Flickable {
             id: audioSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("Audio Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Sound") + "</font>"
             font.pointSize: 12
 
             Column {
@@ -972,7 +1025,7 @@ Flickable {
             id: hostSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("Host Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Host behavior") + "</font>"
             font.pointSize: 12
 
             Column {
@@ -1012,7 +1065,7 @@ Flickable {
             id: uiSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("UI Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Interface") + "</font>"
             font.pointSize: 12
 
             Column {
@@ -1321,7 +1374,7 @@ Flickable {
             id: inputSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("Input Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Pointer and keyboard") + "</font>"
             font.pointSize: 12
 
             Column {
@@ -1469,7 +1522,7 @@ Flickable {
             id: gamepadSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("Gamepad Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Gamepads") + "</font>"
             font.pointSize: 12
 
             Column {
@@ -1544,7 +1597,7 @@ Flickable {
             id: advancedSettingsGroupBox
             width: (parent.width - (parent.leftPadding + parent.rightPadding))
             padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("Advanced Settings") + "</font>"
+            title: "<font color=\"" + SeleneTheme.accent + "\">" + qsTr("Advanced") + "</font>"
             font.pointSize: 12
 
             Column {

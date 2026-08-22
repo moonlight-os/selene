@@ -161,6 +161,8 @@ GlobalCommandLineParser::ParseResult GlobalCommandLineParser::parse(const QStrin
         "  quit            Quit the currently running app\n"
         "  stream          Start streaming an app\n"
         "  pair            Pair a new host\n"
+        "  panel           Open the Moonlight OS control centre\n"
+        "  setup           Run Moonlight OS first-run setup\n"
         "\n"
         "See 'selene <action> --help' for help of specific action."
     );
@@ -196,6 +198,8 @@ GlobalCommandLineParser::ParseResult GlobalCommandLineParser::parse(const QStrin
                 // The appliance settings panel as a window, for when there is
                 // no stream to draw it over. Same panel either way.
                 return PanelRequested;
+            } else if (action == "setup") {
+                return SetupRequested;
             }
         }
 
@@ -375,12 +379,20 @@ void StreamCommandLineParser::parse(const QStringList &args, StreamingPreference
     parser.addChoiceOption("capture-system-keys", "capture system key combos", m_CaptureSysKeysModeMap.keys());
     parser.addChoiceOption("video-codec", "video codec", m_VideoCodecMap.keys());
     parser.addChoiceOption("video-decoder", "video decoder", m_VideoDecoderMap.keys());
+    parser.addValueOption("display-index", "Moonlight OS display stream index");
 
     if (!parser.parse(args)) {
         parser.showError(parser.errorText());
     }
 
     parser.handleUnknownOptions();
+
+    if (parser.isSet("display-index")) {
+        m_DisplayIndex = parser.getIntOption("display-index");
+        if (!inRange(m_DisplayIndex, 0, 15)) {
+            parser.showError("Display index must be between 0 and 15");
+        }
+    }
 
     // Resolve display's width and height
     static QRegularExpression resolutionRexExp("^(720|1080|1440|4K|resolution)$");
@@ -535,6 +547,11 @@ QString StreamCommandLineParser::getHost() const
 QString StreamCommandLineParser::getAppName() const
 {
     return m_AppName;
+}
+
+int StreamCommandLineParser::getDisplayIndex() const
+{
+    return m_DisplayIndex;
 }
 
 ListCommandLineParser::ListCommandLineParser()

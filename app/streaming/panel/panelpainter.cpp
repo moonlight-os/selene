@@ -1,23 +1,14 @@
 #include "panelpainter.h"
+#include "gui/selenetheme.h"
 
 #include <QFontMetrics>
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
+#include <QtMath>
 
 namespace
 {
-// Selene's Material palette, so the panel belongs to the same application as
-// the launcher rather than looking like something bolted on. The primary is
-// the same indigo main.cpp sets for Quick Controls.
-const QColor kCard(0x20, 0x20, 0x24, 0xF2);
-const QColor kBorder(0xFF, 0xFF, 0xFF, 0x1F);
-const QColor kAccent(0x3F, 0x51, 0xB5);
-const QColor kSelected(0x3F, 0x51, 0xB5, 0xCC);
-const QColor kHovered(0xFF, 0xFF, 0xFF, 0x18);
-const QColor kText(0xFF, 0xFF, 0xFF);
-const QColor kMuted(0xFF, 0xFF, 0xFF, 0xB0);
-
 const int kPadding = 28;
 const int kRowHeight = 44;
 const int kRadius = 14;
@@ -33,6 +24,19 @@ const int kShadowMargin = 36;
 QString moreLabel(int count, const QString& arrow)
 {
     return QStringLiteral("%1  %2 more").arg(arrow).arg(count);
+}
+
+QColor toneColour(PanelPainter::Tone tone)
+{
+    const auto& theme = SeleneTheme::palette();
+    switch (tone) {
+    case PanelPainter::Tone::Success: return theme.success;
+    case PanelPainter::Tone::Warning: return theme.warning;
+    case PanelPainter::Tone::Error: return theme.danger;
+    case PanelPainter::Tone::Working: return theme.accent;
+    case PanelPainter::Tone::None: return theme.muted;
+    }
+    return theme.muted;
 }
 }
 
@@ -56,6 +60,7 @@ int PanelPainter::measureWidth(const Model& model) const
     QFontMetrics smallMetrics(m_SmallFont);
 
     int widest = titleMetrics.horizontalAdvance(model.title);
+    widest = qMax(widest, smallMetrics.horizontalAdvance(model.section.toUpper()));
 
     for (const auto& line : model.lines) {
         widest = qMax(widest, rowMetrics.horizontalAdvance(line));
@@ -78,14 +83,16 @@ int PanelPainter::measureWidth(const Model& model) const
         widest = qMax(widest, smallMetrics.horizontalAdvance(moreLabel(model.scrollBelow, QStringLiteral("\u25BC"))));
     }
 
-    widest = qMax(widest, smallMetrics.horizontalAdvance(model.message));
+    widest = qMax(widest, rowMetrics.horizontalAdvance(model.notice.title) + 54);
+    widest = qMax(widest, smallMetrics.horizontalAdvance(model.notice.detail) + 54);
     widest = qMax(widest, smallMetrics.horizontalAdvance(model.hint));
 
     return qBound(kMinWidth, widest + kPadding * 2 + 24, kMaxWidth);
 }
 
-QImage PanelPainter::render(const Model& model)
+QImage PanelPainter::render(const Model& model, const QSize& maximumSize)
 {
+    const auto& theme = SeleneTheme::palette();
     m_RowRects.clear();
 
     QFontMetrics titleMetrics(m_TitleFont);
@@ -95,6 +102,9 @@ QImage PanelPainter::render(const Model& model)
     int width = measureWidth(model);
 
     int height = kPadding;
+    if (!model.section.isEmpty()) {
+        height += smallMetrics.height() + 5;
+    }
     height += titleMetrics.height() + 18;
     if (!model.lines.isEmpty()) {
         height += model.lines.size() * (rowMetrics.height() + 6) + 14;
@@ -103,14 +113,18 @@ QImage PanelPainter::render(const Model& model)
         height += smallMetrics.height() + 6;
     }
     height += model.rows.size() * kRowHeight;
+    height += model.loadingRows * kRowHeight;
     if (model.scrollBelow > 0) {
         height += 6 + smallMetrics.height();
     }
     if (model.inputActive) {
         height += 12 + rowMetrics.height() + 12 + kRowHeight;
     }
-    if (!model.message.isEmpty()) {
-        height += 14 + smallMetrics.height();
+    if (model.notice.isVisible()) {
+        height += 14 + 18 + rowMetrics.height();
+        if (!model.notice.detail.isEmpty()) {
+            height += smallMetrics.height() + 5;
+        }
     }
     if (!model.hint.isEmpty()) {
         height += 18 + smallMetrics.height();
@@ -153,29 +167,40 @@ QImage PanelPainter::render(const Model& model)
     QRectF card(0.5, 0.5, width - 1.0, height - 1.0);
     QPainterPath cardPath;
     cardPath.addRoundedRect(card, kRadius, kRadius);
-    painter.fillPath(cardPath, kCard);
-    painter.setPen(QPen(kBorder, 1));
+    painter.fillPath(cardPath, theme.surface);
+    painter.setPen(QPen(theme.border, 1));
     painter.drawPath(cardPath);
 
     int y = kPadding;
 
+    if (!model.section.isEmpty()) {
+        painter.setFont(m_SmallFont);
+        painter.setPen(theme.accent);
+        painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
+                         Qt::AlignLeft | Qt::AlignVCenter, model.section.toUpper());
+        y += smallMetrics.height() + 5;
+    }
+
     painter.setFont(m_TitleFont);
-    painter.setPen(kText);
-    painter.drawText(QRect(kPadding, y, width - kPadding * 2, titleMetrics.height()),
-                     Qt::AlignLeft | Qt::AlignVCenter, model.title);
+    painter.setPen(theme.text);
+    const int textWidth = width - kPadding * 2;
+    painter.drawText(QRect(kPadding, y, textWidth, titleMetrics.height()),
+                     Qt::AlignLeft | Qt::AlignVCenter,
+                     titleMetrics.elidedText(model.title, Qt::ElideRight, textWidth));
 
     // A short accent rule under the title, which is what stops the panel
     // reading as an undifferentiated block of text.
     int titleBottom = y + titleMetrics.height() + 8;
-    painter.fillRect(QRect(kPadding, titleBottom, 44, 3), kAccent);
+    painter.fillRect(QRect(kPadding, titleBottom, 44, 3), theme.accent);
     y = titleBottom + 18;
 
     if (!model.lines.isEmpty()) {
         painter.setFont(m_RowFont);
-        painter.setPen(kMuted);
+        painter.setPen(theme.muted);
         for (const auto& line : model.lines) {
-            painter.drawText(QRect(kPadding, y, width - kPadding * 2, rowMetrics.height()),
-                             Qt::AlignLeft | Qt::AlignVCenter, line);
+            painter.drawText(QRect(kPadding, y, textWidth, rowMetrics.height()),
+                             Qt::AlignLeft | Qt::AlignVCenter,
+                             rowMetrics.elidedText(line, Qt::ElideRight, textWidth));
             y += rowMetrics.height() + 6;
         }
         y += 14;
@@ -183,7 +208,7 @@ QImage PanelPainter::render(const Model& model)
 
     if (model.scrollAbove > 0) {
         painter.setFont(m_SmallFont);
-        painter.setPen(kMuted);
+        painter.setPen(theme.muted);
         painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
                          Qt::AlignHCenter | Qt::AlignVCenter,
                          moreLabel(model.scrollAbove, QStringLiteral("\u25B2")));
@@ -199,25 +224,34 @@ QImage PanelPainter::render(const Model& model)
         // card coordinates (the painter is translated) while hit-testing
         // works in image coordinates. Without this the hover is off by
         // exactly the margin, which reads as "the mouse is misaligned".
-        m_RowRects.append(rect.translated(kShadowMargin, kShadowMargin));
+        m_RowRects.append(row.selectable
+                              ? rect.translated(kShadowMargin, kShadowMargin)
+                              : QRect());
 
-        if (i == model.selected) {
+        if (row.selectable && i == model.selected) {
             QPainterPath path;
             path.addRoundedRect(rect, 8, 8);
-            painter.fillPath(path, kSelected);
+            painter.fillPath(path, theme.selection);
         }
-        else if (i == model.hovered) {
+        else if (row.selectable && i == model.hovered) {
             QPainterPath path;
             path.addRoundedRect(rect, 8, 8);
-            painter.fillPath(path, kHovered);
+            painter.fillPath(path, theme.hover);
         }
 
-        painter.setPen(kText);
-        painter.drawText(rect.adjusted(kPadding / 2 + 8, 0, -(kPadding / 2 + 8), 0),
-                         Qt::AlignLeft | Qt::AlignVCenter, row.text);
+        painter.setPen(!row.selectable ? theme.disabled
+                                       : row.destructive ? theme.danger : theme.text);
+        const QRect rowTextRect = rect.adjusted(kPadding / 2 + 8, 0, -(kPadding / 2 + 8), 0);
+        int rowTextWidth = rowTextRect.width();
+        if (!row.detail.isEmpty()) {
+            rowTextWidth = qMax(80, rowTextWidth - rowMetrics.horizontalAdvance(row.detail) - 32);
+        }
+        painter.drawText(QRect(rowTextRect.x(), rowTextRect.y(), rowTextWidth, rowTextRect.height()),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         rowMetrics.elidedText(row.text, Qt::ElideRight, rowTextWidth));
 
         if (!row.detail.isEmpty()) {
-            painter.setPen(kMuted);
+            painter.setPen(theme.muted);
             painter.drawText(rect.adjusted(kPadding / 2 + 8, 0, -(kPadding / 2 + 8), 0),
                              Qt::AlignRight | Qt::AlignVCenter, row.detail);
         }
@@ -225,10 +259,24 @@ QImage PanelPainter::render(const Model& model)
         y += kRowHeight;
     }
 
+    // A loading screen should still have shape. These quiet rails reserve the
+    // space the result will use without pretending stale actions are live.
+    for (int i = 0; i < model.loadingRows; i++) {
+        QRect rail(kPadding + 12, y + 15, width - kPadding * 2 - 24, 12);
+        int shorten = (i % 3) * 58;
+        rail.setWidth(qMax(120, rail.width() - shorten));
+        QPainterPath railPath;
+        railPath.addRoundedRect(rail, 6, 6);
+        QColor railColour = theme.muted;
+        railColour.setAlpha(0x20);
+        painter.fillPath(railPath, railColour);
+        y += kRowHeight;
+    }
+
     if (model.scrollBelow > 0) {
         y += 6;
         painter.setFont(m_SmallFont);
-        painter.setPen(kMuted);
+        painter.setPen(theme.muted);
         painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
                          Qt::AlignHCenter | Qt::AlignVCenter,
                          moreLabel(model.scrollBelow, QStringLiteral("\u25BC")));
@@ -238,7 +286,7 @@ QImage PanelPainter::render(const Model& model)
     if (model.inputActive) {
         y += 12;
         painter.setFont(m_RowFont);
-        painter.setPen(kMuted);
+        painter.setPen(theme.muted);
         painter.drawText(QRect(kPadding, y, width - kPadding * 2, rowMetrics.height()),
                          Qt::AlignLeft | Qt::AlignVCenter, model.inputLabel);
         y += rowMetrics.height() + 12;
@@ -247,7 +295,7 @@ QImage PanelPainter::render(const Model& model)
         QPainterPath fieldPath;
         fieldPath.addRoundedRect(field, 8, 8);
         painter.fillPath(fieldPath, QColor(0, 0, 0, 0x66));
-        painter.setPen(QPen(kAccent, 2));
+        painter.setPen(QPen(theme.accent, 2));
         painter.drawPath(fieldPath);
 
         // Dots, not characters. Someone reading over a shoulder is the
@@ -256,38 +304,89 @@ QImage PanelPainter::render(const Model& model)
             ? QString(model.inputValue.length(), QChar(0x2022))
             : model.inputValue;
 
-        painter.setPen(kText);
+        painter.setPen(theme.text);
         painter.drawText(field.adjusted(12, 0, -12, 0),
                          Qt::AlignLeft | Qt::AlignVCenter, shown + QStringLiteral("_"));
         y += kRowHeight - 8;
     }
 
-    if (!model.message.isEmpty()) {
+    if (model.notice.isVisible()) {
         y += 14;
-        painter.setFont(m_SmallFont);
-        painter.setPen(kAccent.lighter(140));
-        painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
-                         Qt::AlignLeft | Qt::AlignVCenter, model.message);
-        y += smallMetrics.height();
+        QColor colour = toneColour(model.notice.tone);
+        QRect noticeRect(kPadding, y, width - kPadding * 2,
+                         18 + rowMetrics.height()
+                             + (model.notice.detail.isEmpty() ? 0 : smallMetrics.height() + 5));
+        QPainterPath noticePath;
+        noticePath.addRoundedRect(noticeRect, 9, 9);
+        painter.fillPath(noticePath, QColor(colour.red(), colour.green(), colour.blue(), 0x18));
+        painter.fillRect(QRect(noticeRect.x(), noticeRect.y() + 6, 3,
+                               noticeRect.height() - 12), colour);
+
+        int textX = noticeRect.x() + 18;
+        if (model.notice.isWorking()) {
+            // Eight restrained points orbit only while work is actually in
+            // flight. At four frames per second it reads as alive without
+            // making the Atom redraw a decorative animation continuously.
+            QPointF centre(noticeRect.x() + 25, noticeRect.y() + 19);
+            for (int dot = 0; dot < 8; dot++) {
+                constexpr double pi = 3.14159265358979323846;
+                double angle = (dot * 2.0 * pi / 8.0) - pi / 2.0;
+                QPointF at = centre + QPointF(qCos(angle) * 8.0, qSin(angle) * 8.0);
+                int distance = (dot - model.activityFrame) & 7;
+                int alpha = qMax(45, 255 - distance * 28);
+                painter.setBrush(QColor(colour.red(), colour.green(), colour.blue(), alpha));
+                painter.setPen(Qt::NoPen);
+                painter.drawEllipse(at, distance == 0 ? 2.7 : 2.0,
+                                     distance == 0 ? 2.7 : 2.0);
+            }
+            textX = noticeRect.x() + 48;
+        }
+
+        painter.setFont(m_RowFont);
+        painter.setPen(colour);
+        painter.drawText(QRect(textX, noticeRect.y() + 8,
+                               noticeRect.right() - textX - 10, rowMetrics.height()),
+                         Qt::AlignLeft | Qt::AlignVCenter, model.notice.title);
+        if (!model.notice.detail.isEmpty()) {
+            painter.setFont(m_SmallFont);
+            painter.setPen(theme.muted);
+            painter.drawText(QRect(textX, noticeRect.y() + 10 + rowMetrics.height(),
+                                   noticeRect.right() - textX - 10, smallMetrics.height()),
+                             Qt::AlignLeft | Qt::AlignVCenter, model.notice.detail);
+        }
+        y += noticeRect.height();
     }
 
     if (!model.hint.isEmpty()) {
         y += 18;
         painter.setFont(m_SmallFont);
-        painter.setPen(kMuted);
+        painter.setPen(theme.muted);
         painter.drawText(QRect(kPadding, y, width - kPadding * 2, smallMetrics.height()),
                          Qt::AlignLeft | Qt::AlignVCenter, model.hint);
     }
 
     painter.end();
 
+    if (maximumSize.isValid() && !maximumSize.isEmpty()
+            && (image.width() > maximumSize.width() || image.height() > maximumSize.height())) {
+        const qreal scale = qMin(qreal(maximumSize.width()) / image.width(),
+                                 qreal(maximumSize.height()) / image.height());
+        image = image.scaled(QSize(qMax(1, qRound(image.width() * scale)),
+                                   qMax(1, qRound(image.height() * scale))),
+                             Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        for (QRect& rect : m_RowRects) {
+            rect = QRect(qRound(rect.x() * scale), qRound(rect.y() * scale),
+                         qRound(rect.width() * scale), qRound(rect.height() * scale));
+        }
+    }
+
     m_Size = image.size();
     return image;
 }
 
-SDL_Surface* PanelPainter::paint(const Model& model)
+SDL_Surface* PanelPainter::paint(const Model& model, const QSize& maximumSize)
 {
-    QImage image = render(model);
+    QImage image = render(model, maximumSize);
     if (image.isNull()) {
         return nullptr;
     }

@@ -1,11 +1,15 @@
 #include "panelwindow.h"
+#include "gui/selenetheme.h"
 
+#include <QExposeEvent>
+#include <QAccessible>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 
-PanelWindow::PanelWindow()
+PanelWindow::PanelWindow(PanelModel::Mode mode)
+    : m_Model(mode)
 {
     setTitle(QStringLiteral("Moonlight OS"));
 
@@ -14,6 +18,10 @@ PanelWindow::PanelWindow()
 
     connect(&m_PollTimer, &QTimer::timeout, this, [this]() {
         if (m_Model.poll()) {
+            if (m_Model.closeRequested()) {
+                QGuiApplication::quit();
+                return;
+            }
             refresh();
         }
     });
@@ -26,7 +34,19 @@ void PanelWindow::refresh()
     // one meant allocating a surface, copying the card into it row by row, and
     // copying it straight back out again -- twice the pixels of the drawing
     // itself, on every keypress and every hover.
-    m_Image = m_Painter.render(m_Model.model());
+    const auto model = m_Model.model();
+    const QSize available(qMax(1, width() - 24), qMax(1, height() - 24));
+    m_Image = m_Painter.render(model, available);
+
+    QString accessibleTitle = QStringLiteral("Moonlight OS — %1").arg(model.title);
+    if (model.selected >= 0 && model.selected < model.rows.size()) {
+        accessibleTitle += QStringLiteral(" — %1").arg(model.rows.at(model.selected).text);
+    }
+    if (title() != accessibleTitle) {
+        setTitle(accessibleTitle);
+        QAccessibleEvent event(this, QAccessible::NameChanged);
+        QAccessible::updateAccessibility(&event);
+    }
 
     update();
 }
@@ -34,6 +54,20 @@ void PanelWindow::refresh()
 QPoint PanelWindow::panelOrigin() const
 {
     return QPoint((width() - m_Image.width()) / 2, (height() - m_Image.height()) / 2);
+}
+
+void PanelWindow::exposeEvent(QExposeEvent* event)
+{
+    QRasterWindow::exposeEvent(event);
+
+    // refresh() runs once in the constructor so the first frame is ready,
+    // but that update request can be consumed before a Wayland surface is
+    // exposed. On Sway, a cold fullscreen launch then maps with no committed
+    // buffer and shows the empty workspace until the window is resized. Ask
+    // for a fresh frame at the point the compositor can actually receive it.
+    if (isExposed()) {
+        refresh();
+    }
 }
 
 void PanelWindow::paintEvent(QPaintEvent*)
@@ -46,7 +80,7 @@ void PanelWindow::paintEvent(QPaintEvent*)
 
     // Filled here rather than by a palette: a QWindow has no background of
     // its own, and the panel is a card that needs something behind it.
-    painter.fillRect(QRect(0, 0, width(), height()), QColor(0x0A, 0x0A, 0x0C));
+    painter.fillRect(QRect(0, 0, width(), height()), SeleneTheme::palette().backdrop);
     painter.drawImage(panelOrigin(), m_Image);
 }
 
@@ -59,7 +93,23 @@ void PanelWindow::keyPressEvent(QKeyEvent* event)
         m_Model.handleKey(PanelModel::Key::Up);
         break;
     case Qt::Key_Down:
+    case Qt::Key_Tab:
         m_Model.handleKey(PanelModel::Key::Down);
+        break;
+    case Qt::Key_Backtab:
+        m_Model.handleKey(PanelModel::Key::Up);
+        break;
+    case Qt::Key_PageUp:
+        m_Model.handleKey(PanelModel::Key::PageUp);
+        break;
+    case Qt::Key_PageDown:
+        m_Model.handleKey(PanelModel::Key::PageDown);
+        break;
+    case Qt::Key_Home:
+        m_Model.handleKey(PanelModel::Key::Home);
+        break;
+    case Qt::Key_End:
+        m_Model.handleKey(PanelModel::Key::End);
         break;
     case Qt::Key_Return:
     case Qt::Key_Enter:
@@ -104,7 +154,12 @@ void PanelWindow::mouseMoveEvent(QMouseEvent* event)
 {
     // Only on a change. A repaint here is a full render, and motion events
     // arrive far faster than anything needs redrawing.
-    if (m_Model.setHovered(m_Painter.rowAt(event->position().toPoint() - panelOrigin()))) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QPoint position = event->position().toPoint();
+#else
+    const QPoint position = event->localPos().toPoint();
+#endif
+    if (m_Model.setHovered(m_Painter.rowAt(position - panelOrigin()))) {
         refresh();
     }
 }
@@ -115,7 +170,12 @@ void PanelWindow::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    m_Model.activateRow(m_Painter.rowAt(event->position().toPoint() - panelOrigin()));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QPoint position = event->position().toPoint();
+#else
+    const QPoint position = event->localPos().toPoint();
+#endif
+    m_Model.activateRow(m_Painter.rowAt(position - panelOrigin()));
 
     if (m_Model.closeRequested()) {
         QGuiApplication::quit();
@@ -123,4 +183,15 @@ void PanelWindow::mousePressEvent(QMouseEvent* event)
     }
 
     refresh();
+}
+
+void PanelWindow::wheelEvent(QWheelEvent* event)
+{
+    if (event->angleDelta().y() == 0) {
+        return;
+    }
+    m_Model.handleKey(event->angleDelta().y() > 0 ? PanelModel::Key::Up
+                                                  : PanelModel::Key::Down);
+    refresh();
+    event->accept();
 }

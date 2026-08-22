@@ -4,6 +4,10 @@
 **/.vs/
 .vscode/
 build/
+/build-selene/
+/build-audit*/
+__pycache__/
+*.py[cod]
 libs/
 config.tests/*/.qmake.stash
 config.tests/*/Makefile

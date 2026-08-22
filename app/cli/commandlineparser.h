@@ -15,6 +15,7 @@ public:
         PairRequested,
         ListRequested,
         PanelRequested,
+        SetupRequested,
     };
 
     GlobalCommandLineParser();
@@ -64,10 +65,12 @@ public:
 
     QString getHost() const;
     QString getAppName() const;
+    int getDisplayIndex() const;
 
 private:
     QString m_Host;
     QString m_AppName;
+    int m_DisplayIndex = 0;
     QMap<QString, StreamingPreferences::WindowMode> m_WindowModeMap;
     QMap<QString, StreamingPreferences::AudioConfig> m_AudioConfigMap;
     QMap<QString, StreamingPreferences::VideoCodecConfig> m_VideoCodecMap;

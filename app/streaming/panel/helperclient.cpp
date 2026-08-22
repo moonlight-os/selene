@@ -26,10 +26,12 @@ HelperClient::HelperClient(QObject* parent)
         return;
     }
 
-    m_Available = connectToHelper();
-    if (m_Available) {
-        start();
-    }
+    m_Available.store(connectToHelper());
+    // Keep the worker alive even when the helper loses the startup race.
+    // Appliance services can restart independently, and a Selene process
+    // should become usable as soon as the socket appears instead of requiring
+    // the whole streaming client to be restarted.
+    start();
 }
 
 HelperClient::~HelperClient()
@@ -60,7 +62,7 @@ HelperClient::~HelperClient()
     }
 }
 
-bool HelperClient::connectToHelper()
+bool HelperClient::connectToHelper(bool reportMissing)
 {
     // Close-on-exec because this process spawns wl-copy, which forks and stays
     // alive to serve the selection -- an inherited descriptor would be held
@@ -87,9 +89,11 @@ bool HelperClient::connectToHelper()
     if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         // Not an error worth shouting about: a Selene running anywhere other
         // than a Moonlight OS appliance has no helper and never will.
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "No appliance helper at %s (%s), so the settings panel is unavailable",
-                    k_SocketPath, strerror(errno));
+        if (reportMissing) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "No appliance helper at %s (%s), so the settings panel is unavailable",
+                        k_SocketPath, strerror(errno));
+        }
         close(fd);
         return false;
     }
@@ -99,15 +103,44 @@ bool HelperClient::connectToHelper()
     return true;
 }
 
+void HelperClient::connectionLost()
+{
+    if (m_Socket >= 0) {
+        close(m_Socket);
+        m_Socket = -1;
+    }
+    m_Available.store(false);
+
+    // Anything already written to the old connection may have run, or may
+    // have disappeared with the daemon. Never replay a mutating request and
+    // never leave the panel spinning forever: finish each request with a
+    // recoverable error, then let the worker establish a fresh connection.
+    QMutexLocker locker(&m_Lock);
+    m_Outbound.clear();
+    for (int id : m_Outstanding) {
+        QJsonObject error;
+        error["code"] = QStringLiteral("helper_restarted");
+        error["message"] = QStringLiteral("The settings service restarted. Try that action again.");
+
+        QJsonObject reply;
+        reply["id"] = id;
+        reply["ok"] = false;
+        reply["error"] = error;
+        m_Inbound.enqueue(reply);
+    }
+    m_Outstanding.clear();
+}
+
 int HelperClient::request(const QString& op, const QJsonObject& args)
 {
-    if (!m_Available) {
+    if (!m_Available.load()) {
         return 0;
     }
 
     QMutexLocker locker(&m_Lock);
 
     int id = m_NextId++;
+    m_Outstanding.insert(id);
     QJsonObject request;
     request["id"] = id;
     request["op"] = op;
@@ -178,12 +211,42 @@ bool HelperClient::readLine(QByteArray& line)
             return true;
         }
         line.append(c);
+        if (line.size() > k_MaxReplyBytes) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "The helper reply exceeded %lld bytes",
+                        static_cast<long long>(k_MaxReplyBytes));
+            return false;
+        }
     }
 }
 
 void HelperClient::run()
 {
     for (;;) {
+        if (m_Socket < 0) {
+            {
+                QMutexLocker locker(&m_Lock);
+                if (m_Stopping) {
+                    break;
+                }
+            }
+
+            if (connectToHelper(false)) {
+                m_Available.store(true);
+                continue;
+            }
+
+            // Wake promptly for destruction, but otherwise retry quietly.
+            // A service restart normally lasts less than this interval.
+            struct pollfd wake = { m_WakePipe[0], POLLIN, 0 };
+            if (poll(&wake, 1, 1000) > 0 && (wake.revents & POLLIN)) {
+                char drain[64];
+                ssize_t ignored = read(m_WakePipe[0], drain, sizeof(drain));
+                (void)ignored;
+            }
+            continue;
+        }
+
         struct pollfd fds[2];
         fds[0].fd = m_Socket;
         fds[0].events = POLLIN;
@@ -222,9 +285,13 @@ void HelperClient::run()
                 if (!sendLine(line)) {
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                                 "Lost the helper connection while sending");
-                    m_Available = false;
-                    return;
+                    connectionLost();
+                    break;
                 }
+            }
+
+            if (m_Socket < 0) {
+                continue;
             }
         }
 
@@ -232,8 +299,8 @@ void HelperClient::run()
             QByteArray line;
             if (!readLine(line)) {
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "The helper closed the connection");
-                m_Available = false;
-                return;
+                connectionLost();
+                continue;
             }
 
             QJsonParseError error;
@@ -244,8 +311,17 @@ void HelperClient::run()
                 continue;
             }
 
+            QJsonObject reply = document.object();
             QMutexLocker locker(&m_Lock);
-            m_Inbound.enqueue(document.object());
+
+            // A progress event is not a verdict. Keep the request in the
+            // outstanding set until its terminal reply arrives so a helper
+            // restart can still turn it into a recoverable error instead of
+            // leaving the panel's working state spinning forever.
+            if (reply.value("event").toString() != QLatin1String("progress")) {
+                m_Outstanding.remove(reply.value("id").toInt());
+            }
+            m_Inbound.enqueue(reply);
         }
     }
 }

@@ -26,16 +26,35 @@
 class PanelPainter
 {
 public:
+    enum class Tone {
+        None,
+        Working,
+        Success,
+        Warning,
+        Error,
+    };
+
     struct Row {
         QString text;
         QString detail;   // right-aligned, e.g. a signal strength
         bool selectable = true;
+        bool destructive = false;
+    };
+
+    struct Notice {
+        Tone tone = Tone::None;
+        QString title;
+        QString detail;
+
+        bool isVisible() const { return tone != Tone::None || !title.isEmpty() || !detail.isEmpty(); }
+        bool isWorking() const { return tone == Tone::Working; }
     };
 
     // What to draw. Kept as plain data so the menu logic never touches
     // painting and the painting never has to ask the menu anything.
     struct Model {
         QString title;
+        QString section;         // quiet breadcrumb above the title
         QStringList lines;       // free text above the rows, e.g. status
         QVector<Row> rows;
         int selected = -1;
@@ -47,7 +66,9 @@ public:
         // taller than the screen it is centred on.
         int scrollAbove = 0;
         int scrollBelow = 0;
-        QString message;         // progress or error, below the rows
+        Notice notice;           // progress, success, warning, or error
+        int activityFrame = 0;   // the working orbit's animation phase
+        int loadingRows = 0;     // placeholders while the first result loads
         QString hint;
 
         // An input field, shown when the panel is asking for something. The
@@ -64,11 +85,11 @@ public:
     // Draws the model. The window host wants the image; the in-stream overlay
     // wants an SDL surface, and pays for the conversion rather than making
     // the host pay for one it would only undo.
-    QImage render(const Model& model);
+    QImage render(const Model& model, const QSize& maximumSize = {});
 
     // Draws the model and returns a new surface, or nullptr on failure. The
     // caller owns it.
-    SDL_Surface* paint(const Model& model);
+    SDL_Surface* paint(const Model& model, const QSize& maximumSize = {});
 
     // Which row contains a point, in panel-local coordinates, or -1. Valid
     // after the paint that produced the layout.

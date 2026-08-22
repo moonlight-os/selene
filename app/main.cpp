@@ -51,6 +51,7 @@
 #include "utils.h"
 #include "gui/computermodel.h"
 #include "gui/appmodel.h"
+#include "gui/selenetheme.h"
 #include "backend/autoupdatechecker.h"
 #include "backend/computermanager.h"
 #include "backend/systemproperties.h"
@@ -918,6 +919,10 @@ int main(int argc, char *argv[])
     // Register our C++ types for QML
     qmlRegisterType<ComputerModel>("ComputerModel", 1, 0, "ComputerModel");
     qmlRegisterType<AppModel>("AppModel", 1, 0, "AppModel");
+    qmlRegisterSingletonType<SeleneTheme>("SeleneTheme", 1, 0, "SeleneTheme",
+                                         [](QQmlEngine*, QJSEngine*) -> QObject* {
+                                             return new SeleneTheme();
+                                         });
     qmlRegisterUncreatableType<Session>("Session", 1, 0, "Session", "Session cannot be created from QML");
     qmlRegisterSingletonType<ComputerManager>("ComputerManager", 1, 0,
                                               "ComputerManager",
@@ -984,7 +989,8 @@ int main(int argc, char *argv[])
             streamParser.parse(app.arguments(), preferences);
             QString host    = streamParser.getHost();
             QString appName = streamParser.getAppName();
-            auto launcher   = new CliStartStream::Launcher(host, appName, preferences, &app);
+            auto launcher   = new CliStartStream::Launcher(host, appName, preferences,
+                                                            streamParser.getDisplayIndex(), &app);
             engine.rootContext()->setContextProperty("launcher", launcher);
             break;
         }
@@ -1016,13 +1022,16 @@ int main(int argc, char *argv[])
             break;
         }
     case GlobalCommandLineParser::PanelRequested:
+    case GlobalCommandLineParser::SetupRequested:
         {
 #ifdef HAS_PANEL
             // The appliance settings panel, as a window rather than as an
             // overlay. The QML engine is not involved: this is the same
             // PanelModel and PanelPainter the in-stream panel uses, so there
             // is one interface instead of two that drift apart.
-            auto panel = new PanelWindow();
+            auto panel = new PanelWindow(
+                commandLineParserResult == GlobalCommandLineParser::SetupRequested
+                    ? PanelModel::Mode::FirstRun : PanelModel::Mode::ControlCentre);
             if (!panel->isAvailable()) {
                 // No helper means this is not a Moonlight OS appliance, and
                 // a window that can do nothing is worse than a clear refusal.

@@ -47,28 +47,31 @@ void runApplianceCommand(const char* const argv[])
 // into our own surface, and sway holding the binding means we never see it.
 void PanelMenu::claimHotkey()
 {
-    if (!m_Model.isAvailable()) {
+    if (m_HotkeyClaimed || !m_Model.isAvailable()) {
         return;
     }
 
     const char* const argv[] = { "moonlight-hotkey", "release", nullptr };
     runApplianceCommand(argv);
+    m_HotkeyClaimed = true;
 }
 
 // And afterwards it has to go back, or there is no way to open a panel at the
 // launcher -- which is exactly where someone sets up Wi-Fi for the first time.
 void PanelMenu::releaseHotkey()
 {
-    if (!m_Model.isAvailable()) {
+    if (!m_HotkeyClaimed) {
         return;
     }
 
     const char* const argv[] = { "moonlight-hotkey", "grab", nullptr };
     runApplianceCommand(argv);
+    m_HotkeyClaimed = false;
 }
 
 PanelMenu::PanelMenu()
     : m_Open(false),
+      m_HotkeyClaimed(false),
       m_Window(nullptr),
       m_StreamWidth(0),
       m_StreamHeight(0)
@@ -151,7 +154,20 @@ bool PanelMenu::handleKey(const SDL_KeyboardEvent* event)
         m_Model.handleKey(PanelModel::Key::Up);
         break;
     case SDLK_DOWN:
+    case SDLK_TAB:
         m_Model.handleKey(PanelModel::Key::Down);
+        break;
+    case SDLK_PAGEUP:
+        m_Model.handleKey(PanelModel::Key::PageUp);
+        break;
+    case SDLK_PAGEDOWN:
+        m_Model.handleKey(PanelModel::Key::PageDown);
+        break;
+    case SDLK_HOME:
+        m_Model.handleKey(PanelModel::Key::Home);
+        break;
+    case SDLK_END:
+        m_Model.handleKey(PanelModel::Key::End);
         break;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
@@ -246,8 +262,27 @@ bool PanelMenu::handleMouseButton(const SDL_MouseButtonEvent* event)
     return true;
 }
 
+bool PanelMenu::handleMouseWheel(const SDL_MouseWheelEvent* event)
+{
+    if (!m_Open) {
+        return false;
+    }
+    if (event->y != 0) {
+        m_Model.handleKey(event->y > 0 ? PanelModel::Key::Up : PanelModel::Key::Down);
+        redraw();
+    }
+    return true;
+}
+
 void PanelMenu::poll()
 {
+    // If the appliance helper started after the stream, claim the in-client
+    // shortcut as soon as it becomes available. Without this, the reconnect
+    // succeeds but Ctrl+Alt+M remains owned by Sway until the next stream.
+    if (!m_HotkeyClaimed && m_Model.isAvailable()) {
+        claimHotkey();
+    }
+
     if (m_Open && m_Model.poll()) {
         redraw();
     }
@@ -255,7 +290,8 @@ void PanelMenu::poll()
 
 void PanelMenu::redraw()
 {
-    SDL_Surface* surface = m_Painter.paint(m_Model.model());
+    SDL_Surface* surface = m_Painter.paint(
+        m_Model.model(), QSize(qMax(1, m_StreamWidth - 24), qMax(1, m_StreamHeight - 24)));
     if (surface != nullptr) {
         Session::get()->getOverlayManager().setOverlaySurface(Overlay::OverlayPanel, surface);
     }

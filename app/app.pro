@@ -35,6 +35,15 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
+# M7 remains an additive build capability. Release jobs pass the pinned MsQuic
+# library path; local builds without it keep the vanilla carriers and do not
+# advertise QUIC during launch.
+!isEmpty(MSQUIC_LIBRARY) {
+    DEFINES += HAVE_MSQUIC=1
+    INCLUDEPATH += $$PWD/../libs/msquic/include
+    LIBS += $$MSQUIC_LIBRARY
+}
+
 win32 {
     !exists($$PWD/../libs/windows) {
         error("Missing dependencies. Please run 'powershell .\setup-deps.ps1' to fetch prebuilt libraries.")
@@ -189,8 +198,12 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/clipboard.cpp \
+    streaming/quictransport.cpp \
+    streaming/usbtunnelclient.cpp \
     streaming/session.cpp \
     streaming/audio/audio.cpp \
+    streaming/audio/microphone.cpp \
+    streaming/video/camera.cpp \
     streaming/audio/renderers/sdlaud.cpp \
     gui/computermodel.cpp \
     gui/appmodel.cpp \
@@ -227,8 +240,12 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/clipboard.h \
+    streaming/quictransport.h \
+    streaming/usbtunnelclient.h \
     streaming/session.h \
     streaming/audio/renderers/renderer.h \
+    streaming/audio/microphone.h \
+    streaming/video/camera.h \
     streaming/audio/renderers/sdl.h \
     gui/computermodel.h \
     gui/appmodel.h \
@@ -559,6 +576,12 @@ macx {
 
 VERSION = "$$cat(version.txt)"
 DEFINES += VERSION_STR=\\\"$$cat(version.txt)\\\"
+
+# Semantic colours are shared by the QML application and the native
+# in-stream panel. Keeping this outside HAS_PANEL also makes the contract
+# available on platforms where the appliance panel is not built.
+SOURCES += gui/selenetheme.cpp
+HEADERS += gui/selenetheme.h
 
 # The Moonlight OS settings panel talks to a privileged helper over a unix
 # socket and asks a Wayland compositor for a hotkey. Neither exists on
