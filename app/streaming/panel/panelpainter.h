@@ -56,6 +56,7 @@ public:
         QString title;
         QString section;         // quiet breadcrumb above the title
         QStringList lines;       // free text above the rows, e.g. status
+        QImage qrCode;            // approval QR rendered between text and actions
         QVector<Row> rows;
         int selected = -1;
         int hovered = -1;

@@ -14,6 +14,8 @@ const int kRowHeight = 44;
 const int kRadius = 14;
 const int kMinWidth = 460;
 const int kMaxWidth = 820;
+const int kQrSize = 228;
+const int kQrBorder = 10;
 
 // Room around the card for its shadow. This is not blur -- blurring the video
 // behind the panel would mean sampling the frame, which happens inside each of
@@ -61,6 +63,9 @@ int PanelPainter::measureWidth(const Model& model) const
 
     int widest = titleMetrics.horizontalAdvance(model.title);
     widest = qMax(widest, smallMetrics.horizontalAdvance(model.section.toUpper()));
+    if (!model.qrCode.isNull()) {
+        widest = qMax(widest, kQrSize + kQrBorder * 2);
+    }
 
     for (const auto& line : model.lines) {
         widest = qMax(widest, rowMetrics.horizontalAdvance(line));
@@ -108,6 +113,9 @@ QImage PanelPainter::render(const Model& model, const QSize& maximumSize)
     height += titleMetrics.height() + 18;
     if (!model.lines.isEmpty()) {
         height += model.lines.size() * (rowMetrics.height() + 6) + 14;
+    }
+    if (!model.qrCode.isNull()) {
+        height += kQrSize + kQrBorder * 2 + 14;
     }
     if (model.scrollAbove > 0) {
         height += smallMetrics.height() + 6;
@@ -204,6 +212,22 @@ QImage PanelPainter::render(const Model& model, const QSize& maximumSize)
             y += rowMetrics.height() + 6;
         }
         y += 14;
+    }
+
+    if (!model.qrCode.isNull()) {
+        const QRect frame((width - kQrSize - kQrBorder * 2) / 2, y,
+                          kQrSize + kQrBorder * 2, kQrSize + kQrBorder * 2);
+        painter.fillRect(frame, Qt::white);
+
+        // QR modules must remain hard-edged. Smooth interpolation introduces
+        // grey seams that look pleasant but make a television-mounted code
+        // needlessly difficult for a phone camera to scan.
+        const QImage qr = model.qrCode.scaled(kQrSize, kQrSize,
+                                              Qt::KeepAspectRatio,
+                                              Qt::FastTransformation);
+        painter.drawImage(QPoint(frame.center().x() - qr.width() / 2,
+                                 frame.center().y() - qr.height() / 2), qr);
+        y += frame.height() + 14;
     }
 
     if (model.scrollAbove > 0) {

@@ -188,7 +188,10 @@ QString PanelModel::screenTitle() const
     case Screen::SetupLoading: return QStringLiteral("Starting up");
     case Screen::Welcome: return QStringLiteral("Welcome to Moonlight OS");
     case Screen::SetupIntro: return QStringLiteral("Set up this Moonlight box");
-    case Screen::SetupNetwork: return QStringLiteral("Connect to a network");
+    case Screen::SetupNetwork:
+        return m_ConnectionType == QLatin1String("none") || m_ConnectionType.isEmpty()
+            ? QStringLiteral("Connect to a network")
+            : QStringLiteral("Network connected");
     case Screen::SetupComplete: return QStringLiteral("Ready to stream");
     case Screen::Main: return QStringLiteral("Control centre");
     case Screen::Streaming: return QStringLiteral("Streaming");
@@ -439,6 +442,15 @@ QStringList PanelModel::currentItems() const
     case Screen::SetupIntro:
         return { "Start setup" };
     case Screen::SetupNetwork:
+        if (m_ConnectionType == QLatin1String("ethernet")) {
+            return { "Continue with Ethernet", "Use Wi-Fi instead", "Back" };
+        }
+        if (m_ConnectionType == QLatin1String("wifi")) {
+            return { "Continue with Wi-Fi", "Choose another Wi-Fi network", "Back" };
+        }
+        if (m_ConnectionType == QLatin1String("other")) {
+            return { "Continue with current network", "Connect to Wi-Fi instead", "Back" };
+        }
         return { "Connect to Wi-Fi", "Continue without a network", "Back" };
     case Screen::SetupComplete:
         return { "Start Selene" };
@@ -987,8 +999,11 @@ PanelPainter::Model PanelModel::model() const
     if (m_Screen == Screen::Tailscale) {
         out.lines = m_TailscaleLines;
         if (!m_TailscaleLoginUrl.isEmpty()) {
-            out.lines.prepend(m_TailscaleLoginUrl);
-            out.lines.prepend(QStringLiteral("Approve this box on another device:"));
+            out.lines = QStringList{
+                QStringLiteral("Approve this box on another device:"),
+                m_TailscaleLoginUrl,
+            };
+            out.qrCode = m_TailscaleLoginQr;
         }
     }
 
@@ -1419,12 +1434,16 @@ void PanelModel::activateSelection()
     }
 
     if (m_Screen == Screen::SetupNetwork) {
-        if (action == "Connect to Wi-Fi") {
+        if (action == "Connect to Wi-Fi" || action == "Use Wi-Fi instead"
+                || action == "Choose another Wi-Fi network"
+                || action == "Connect to Wi-Fi instead") {
             goTo(Screen::Networks);
             ask(QStringLiteral("wifi.list"), {}, QStringLiteral("Scanning for Wi-Fi"),
                 QStringLiteral("Nearby networks will appear when the scan completes."));
         }
-        else if (action == "Continue without a network") {
+        else if (action == "Continue without a network" || action == "Continue with Ethernet"
+                 || action == "Continue with Wi-Fi"
+                 || action == "Continue with current network") {
             goTo(Screen::SetupComplete);
         }
         else {
@@ -2881,6 +2900,20 @@ void PanelModel::applyReply(const Request& request, const QJsonObject& reply)
         m_TailscaleLines.clear();
         m_TailscaleState = result.value("state").toString(QStringLiteral("unknown"));
         m_TailscaleLoginUrl = result.value("login_url").toString();
+        m_TailscaleLoginQr = {};
+        const QString qrDataUrl = result.value("login_qr").toString();
+        const QString qrPrefix = QStringLiteral("data:image/png;base64,");
+        if (qrDataUrl.startsWith(qrPrefix) && qrDataUrl.size() <= 262144) {
+            const QByteArray png = QByteArray::fromBase64(
+                qrDataUrl.mid(qrPrefix.size()).toLatin1(),
+                QByteArray::AbortOnBase64DecodingErrors);
+            QImage image;
+            if (image.loadFromData(png, "PNG")
+                    && image.width() > 0 && image.height() > 0
+                    && image.width() <= 1024 && image.height() <= 1024) {
+                m_TailscaleLoginQr = image;
+            }
+        }
         QString name = result.value("name").toString();
         m_TailscaleLines.append(QStringLiteral("State    %1").arg(m_TailscaleState));
         if (!name.isEmpty()) {
@@ -2996,10 +3029,35 @@ void PanelModel::applyReply(const Request& request, const QJsonObject& reply)
         return;
     }
 
+    m_ConnectionType = result.value("connection_type").toString();
+    if (m_ConnectionType.isEmpty()) {
+        m_ConnectionType = !result.value("wifi").toString().isEmpty()
+            ? QStringLiteral("wifi")
+            : (!result.value("address").toString().isEmpty()
+               ? QStringLiteral("other") : QStringLiteral("none"));
+    }
+    const QString connectionName = result.value("connection_name").toString();
+    QString network;
+    if (m_ConnectionType == QLatin1String("ethernet")) {
+        network = connectionName.isEmpty()
+            ? QStringLiteral("Ethernet")
+            : QStringLiteral("Ethernet — %1").arg(connectionName);
+    }
+    else if (m_ConnectionType == QLatin1String("wifi")) {
+        network = connectionName.isEmpty()
+            ? QStringLiteral("Wi-Fi")
+            : QStringLiteral("Wi-Fi — %1").arg(connectionName);
+    }
+    else if (m_ConnectionType == QLatin1String("other")) {
+        network = QStringLiteral("Connected");
+    }
+    else {
+        network = QStringLiteral("Not connected");
+    }
     m_StatusLines = QStringList{
         QStringLiteral("Name     %1").arg(result.value("hostname").toString()),
         QStringLiteral("Address  %1").arg(result.value("address").toString(QStringLiteral("none"))),
-        QStringLiteral("Wi-Fi    %1").arg(result.value("wifi").toString(QStringLiteral("not connected"))),
+        QStringLiteral("Network  %1").arg(network),
     };
     if (visible && op == QLatin1String("wifi.connect")) {
         showNotice(PanelPainter::Tone::Success, QStringLiteral("Connected"),
