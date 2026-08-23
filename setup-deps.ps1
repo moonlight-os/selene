@@ -44,6 +44,11 @@ if ((Get-FileHash -Algorithm SHA256 $MsQuicArchive).Hash.ToLowerInvariant() -ne 
     throw "MsQuic package checksum mismatch"
 }
 Expand-Archive -Path $MsQuicArchive -DestinationPath $MsQuicExtract
+$MsQuicIncludeDir = Join-Path $PSScriptRoot "libs\msquic\include"
+New-Item -ItemType Directory -Path $MsQuicIncludeDir -Force | Out-Null
+foreach ($Header in @("msquic.h", "msquic.hpp", "msquicp.h", "msquic_winuser.h")) {
+    Copy-Item (Join-Path $MsQuicExtract "build\native\include\$Header") $MsQuicIncludeDir -Force
+}
 foreach ($Architecture in @("x64", "arm64")) {
     $LibraryDir = Join-Path $TargetDir "lib\$Architecture"
     New-Item -ItemType Directory -Path $LibraryDir -Force | Out-Null

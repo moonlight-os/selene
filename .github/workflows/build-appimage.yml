@@ -44,6 +44,16 @@ jobs:
           wget -q https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/libm/libmsquic/libmsquic_2.5.9_amd64.deb -O dep_root/libmsquic.deb
           echo "89097dcf77bc8ac421f5bca1afe8826a268137f5639e93ddb039682059498ab5  dep_root/libmsquic.deb" | sha256sum -c -
           dpkg-deb -x dep_root/libmsquic.deb dep_root/msquic
+          mkdir -p libs/msquic/include
+          while IFS=: read -r path hash; do
+            dest="libs/msquic/include/${path##*/}"
+            curl -fL --retry 3 -o "$dest" "https://raw.githubusercontent.com/microsoft/msquic/v2.5.9/$path"
+            echo "$hash  $dest" | sha256sum -c -
+          done <<'EOF'
+          src/inc/msquic.h:c9abfdd02c45910649dd335d6bd82718e4ddd2fdb35fe550567c78f032551e0c
+          src/inc/msquic_posix.h:b285fa66b9c9bdc886c30ef92910da472692b25f5c6192416fb40f08f64e22ec
+          src/inc/quic_sal_stub.h:9b13328d9aec8807a754b2bc391b31b5d09b1c5f6cec064012051683ed169055
+          EOF
           echo "MSQUIC_LIBRARY=$PWD/dep_root/msquic/usr/lib/x86_64-linux-gnu/libmsquic.so.2.5.9" >> "${GITHUB_ENV}"
 
       - name: Checkout SDL3

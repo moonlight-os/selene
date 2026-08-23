@@ -172,9 +172,11 @@ void SdlInputHandler::handleMouseMotionEvent(SDL_MouseMotionEvent* event)
 
 void SdlInputHandler::handleMouseWheelEvent(SDL_MouseWheelEvent* event)
 {
+#ifdef HAS_PANEL
     if (m_Panel != nullptr && m_Panel->handleMouseWheel(event)) {
         return;
     }
+#endif
     if (!isCaptureActive()) {
         // Not capturing
         return;
