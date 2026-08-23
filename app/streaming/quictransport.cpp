@@ -152,7 +152,6 @@ struct QuicTransport::Impl
     bool connectionFinished = false;
     bool failed = false;
     bool shutdownRequested = false;
-    bool connectionCloseOwnedByStop = false;
     std::array<std::unique_ptr<UdpBridge>, MLOS_QUIC_DATAGRAM_CAMERA + 1> udp;
     std::thread rtspWorker;
     std::mutex rtspMutex;
@@ -193,7 +192,7 @@ struct QuicTransport::Impl
         HQUIC handle = nullptr;
         {
             std::lock_guard lock(stateMutex);
-            if (connection != nullptr && !shutdownRequested) {
+            if (connection != nullptr && !shutdownRequested && !connectionFinished) {
                 shutdownRequested = true;
                 handle = connection;
             }
@@ -288,7 +287,7 @@ struct QuicTransport::Impl
         return QUIC_STATUS_SUCCESS;
     }
 
-    static QUIC_STATUS QUIC_API connectionCallback(HQUIC connection_, void* context,
+    static QUIC_STATUS QUIC_API connectionCallback(HQUIC, void* context,
                                                     QUIC_CONNECTION_EVENT* event) {
         auto self = static_cast<Impl*>(context);
         switch (event->Type) {
@@ -337,14 +336,6 @@ struct QuicTransport::Impl
                 }
                 break;
             case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
-                bool closeInCallback = false;
-                {
-                    std::lock_guard lock(self->stateMutex);
-                    closeInCallback = !event->SHUTDOWN_COMPLETE.AppCloseInProgress &&
-                                      !self->connectionCloseOwnedByStop;
-                    self->connection = nullptr;
-                }
-                if (closeInCallback) self->api->ConnectionClose(connection_);
                 {
                     std::lock_guard lock(self->stateMutex);
                     self->connectionFinished = true;
@@ -496,7 +487,15 @@ struct QuicTransport::Impl
                     }
                 }
 
-                api->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
+                // stop() owns the connection handle and may be waiting for this
+                // worker before it closes it. Never queue a stream operation
+                // after teardown begins or after MsQuic has reported connection
+                // shutdown complete: its operation queue is no longer usable.
+                {
+                    std::lock_guard lock(stateMutex);
+                    if (stopping || connectionFinished || connection == nullptr) return;
+                    api->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
+                }
                 std::unique_lock lock(rtspMutex);
                 if (!rtspBoundChanged.wait_for(lock, std::chrono::seconds(5), [this, stream] {
                         return stopping.load() || rtspStream != stream;
@@ -536,18 +535,17 @@ struct QuicTransport::Impl
         for (auto& bridge : udp) bridge.reset();
         if (rtspWorker.joinable()) rtspWorker.join();
         shutdownConnection(QUIC_CONNECTION_SHUTDOWN_FLAG_SILENT, 0);
-        HQUIC unfinishedConnection = nullptr;
+        HQUIC connectionToClose = nullptr;
         if (api) {
             std::unique_lock lock(stateMutex);
             stateChanged.wait_for(lock, std::chrono::seconds(5), [this] { return connectionFinished; });
-            unfinishedConnection = connection;
-            connectionCloseOwnedByStop = unfinishedConnection != nullptr;
+            connectionToClose = connection;
             connection = nullptr;
         }
-        // ConnectionClose is a synchronous final release. If shutdown did not
-        // complete in time, closing here causes the eventual callback to carry
-        // AppCloseInProgress and prevents it from closing the handle twice.
-        if (unfinishedConnection && api) api->ConnectionClose(unfinishedConnection);
+        // The connection callback only reports completion. Keeping final handle
+        // ownership here guarantees that all proxy workers are gone before the
+        // connection (and its stream operation queues) can be destroyed.
+        if (connectionToClose && api) api->ConnectionClose(connectionToClose);
         if (configuration && api) api->ConfigurationClose(configuration);
         configuration = nullptr;
         if (registration && api) api->RegistrationClose(registration);
