@@ -96,6 +96,18 @@ void Session::clStageStarting(int stage)
 
 void Session::clStageFailed(int stage, int errorCode)
 {
+    // The legacy connectivity test probes the GameStream TCP/UDP ports. Those
+    // probes do not describe a QUIC session (which has one authenticated UDP
+    // endpoint), and running a second socket-platform lifecycle while the
+    // failed QUIC connection is unwinding can race its teardown. Report the
+    // actual stage failure and let QuicTransport provide the transport error.
+    if (s_ActiveSession->m_QuicTransport != nullptr) {
+        s_ActiveSession->m_PortTestResults = 0;
+        emit s_ActiveSession->stageFailed(
+            QString::fromLocal8Bit(LiGetStageName(stage)), errorCode, QString());
+        return;
+    }
+
     // Perform the port test now, while we're on the async connection thread and not blocking the UI.
     unsigned int portFlags = LiGetPortFlagsFromStage(stage);
     s_ActiveSession->m_PortTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portFlags);

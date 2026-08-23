@@ -151,6 +151,8 @@ struct QuicTransport::Impl
     std::condition_variable stateChanged;
     bool connectionFinished = false;
     bool failed = false;
+    bool shutdownRequested = false;
+    bool connectionCloseOwnedByStop = false;
     std::array<std::unique_ptr<UdpBridge>, MLOS_QUIC_DATAGRAM_CAMERA + 1> udp;
     std::thread rtspWorker;
     std::mutex rtspMutex;
@@ -187,13 +189,27 @@ struct QuicTransport::Impl
         return QUIC_SUCCEEDED(status);
     }
 
+    void shutdownConnection(QUIC_CONNECTION_SHUTDOWN_FLAGS flags, QUIC_UINT62 errorCode) {
+        HQUIC handle = nullptr;
+        {
+            std::lock_guard lock(stateMutex);
+            if (connection != nullptr && !shutdownRequested) {
+                shutdownRequested = true;
+                handle = connection;
+            }
+        }
+        if (handle != nullptr && api != nullptr) {
+            api->ConnectionShutdown(handle, flags, errorCode);
+        }
+    }
+
     void fail() {
         {
             std::lock_guard lock(stateMutex);
             failed = true;
         }
         stateChanged.notify_all();
-        if (connection) api->ConnectionShutdown(connection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0x100);
+        shutdownConnection(QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0x100);
     }
 
     bool openAuthStream() {
@@ -320,15 +336,22 @@ struct QuicTransport::Impl
                     freeSend(event->DATAGRAM_SEND_STATE_CHANGED.ClientContext);
                 }
                 break;
-            case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE:
-                if (!event->SHUTDOWN_COMPLETE.AppCloseInProgress) self->api->ConnectionClose(connection_);
-                self->connection = nullptr;
+            case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
+                bool closeInCallback = false;
+                {
+                    std::lock_guard lock(self->stateMutex);
+                    closeInCallback = !event->SHUTDOWN_COMPLETE.AppCloseInProgress &&
+                                      !self->connectionCloseOwnedByStop;
+                    self->connection = nullptr;
+                }
+                if (closeInCallback) self->api->ConnectionClose(connection_);
                 {
                     std::lock_guard lock(self->stateMutex);
                     self->connectionFinished = true;
                 }
                 self->stateChanged.notify_all();
                 break;
+            }
             default:
                 break;
         }
@@ -512,13 +535,19 @@ struct QuicTransport::Impl
         if (stopping.exchange(true)) return;
         for (auto& bridge : udp) bridge.reset();
         if (rtspWorker.joinable()) rtspWorker.join();
-        if (connection && api) api->ConnectionShutdown(connection, QUIC_CONNECTION_SHUTDOWN_FLAG_SILENT, 0);
-        if (connection && api) {
+        shutdownConnection(QUIC_CONNECTION_SHUTDOWN_FLAG_SILENT, 0);
+        HQUIC unfinishedConnection = nullptr;
+        if (api) {
             std::unique_lock lock(stateMutex);
             stateChanged.wait_for(lock, std::chrono::seconds(5), [this] { return connectionFinished; });
+            unfinishedConnection = connection;
+            connectionCloseOwnedByStop = unfinishedConnection != nullptr;
+            connection = nullptr;
         }
-        if (connection && api) api->ConnectionClose(connection);
-        connection = nullptr;
+        // ConnectionClose is a synchronous final release. If shutdown did not
+        // complete in time, closing here causes the eventual callback to carry
+        // AppCloseInProgress and prevents it from closing the handle twice.
+        if (unfinishedConnection && api) api->ConnectionClose(unfinishedConnection);
         if (configuration && api) api->ConfigurationClose(configuration);
         configuration = nullptr;
         if (registration && api) api->RegistrationClose(registration);
