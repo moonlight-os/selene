@@ -410,30 +410,41 @@ void Session::clUsbTunnelClose(uint32_t tunnelId, uint16_t reason)
 
 void Session::clDiskTunnelOpen(uint32_t tunnelId)
 {
+#ifdef HAS_PANEL
     if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
             s_ActiveSession->m_DiskTunnel != nullptr) {
         s_ActiveSession->m_DiskTunnel->open(tunnelId);
         return;
     }
+#endif
     LiSendDiskTunnelClose(tunnelId, ML_USB_TUNNEL_CLOSE_CONNECT_FAILED);
 }
 
 void Session::clDiskTunnelData(uint32_t tunnelId, const void* data, uint16_t length)
 {
+#ifdef HAS_PANEL
     if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
             s_ActiveSession->m_DiskTunnel != nullptr) {
         s_ActiveSession->m_DiskTunnel->write(tunnelId, data, length);
         return;
     }
+#endif
+    Q_UNUSED(data);
+    Q_UNUSED(length);
     LiSendDiskTunnelClose(tunnelId, ML_USB_TUNNEL_CLOSE_CONNECT_FAILED);
 }
 
 void Session::clDiskTunnelClose(uint32_t tunnelId, uint16_t reason)
 {
+#ifdef HAS_PANEL
     if (s_ActiveSession != nullptr && s_ActiveSession->m_DisplayIndex == 0 &&
             s_ActiveSession->m_DiskTunnel != nullptr) {
         s_ActiveSession->m_DiskTunnel->close(tunnelId, reason);
     }
+#else
+    Q_UNUSED(tunnelId);
+    Q_UNUSED(reason);
+#endif
 }
 
 
