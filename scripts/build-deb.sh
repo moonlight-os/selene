@@ -31,7 +31,7 @@ docker build -q --network host -t "$IMAGE" - >/dev/null <<-DOCKERFILE
 	ENV DEBIAN_FRONTEND=noninteractive
 	RUN apt-get update \
 	 && apt-get install -y --no-install-recommends \
-	        build-essential devscripts equivs dpkg-dev ca-certificates \
+	        build-essential devscripts equivs dpkg-dev ca-certificates curl \
 	 && rm -rf /var/lib/apt/lists/*
 DOCKERFILE
 
