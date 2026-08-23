@@ -644,6 +644,7 @@ QStringList PanelModel::currentItems() const
     case Screen::Maintenance:
     {
         QStringList items { "Health & diagnostics", "Video recovery", "Settings backup" };
+        if (m_UpdateAvailable) items.append(QStringLiteral("Update Moonlight OS"));
         if (m_InstallAvailable) items.append(QStringLiteral("Install to this computer"));
         if (m_PersistenceAvailable && !m_Persistence) {
             items.append(QStringLiteral("Save settings to this USB stick"));
@@ -1849,13 +1850,17 @@ void PanelModel::activateSelection()
     }
 
     if (m_Screen == Screen::Maintenance
-            && (action == "Save settings to this USB stick"
+            && (action == "Update Moonlight OS"
+                || action == "Save settings to this USB stick"
                 || action == "Open command line")) {
         QJsonObject args;
-        args["workflow"] = action == "Save settings to this USB stick"
-            ? QStringLiteral("persist") : QStringLiteral("shell");
+        args["workflow"] = action == "Update Moonlight OS"
+            ? QStringLiteral("update")
+            : action == "Save settings to this USB stick"
+                ? QStringLiteral("persist") : QStringLiteral("shell");
         ask(QStringLiteral("system.launch"), args,
-            action == "Open command line" ? QStringLiteral("Opening command line")
+            action == "Update Moonlight OS" ? QStringLiteral("Opening system updater")
+            : action == "Open command line" ? QStringLiteral("Opening command line")
                                               : QStringLiteral("Opening persistence setup"),
             QStringLiteral("The panel closes before the guided terminal opens."));
         return;
@@ -2667,6 +2672,7 @@ void PanelModel::applyReply(const Request& request, const QJsonObject& reply)
         m_Persistence = result.value("persistence").toBool();
         m_InstallAvailable = result.value("install_available").toBool();
         m_PersistenceAvailable = result.value("persistence_available").toBool();
+        m_UpdateAvailable = result.value("update_available").toBool();
         m_TerminalAvailable = result.value("terminal_available").toBool();
         return;
     }

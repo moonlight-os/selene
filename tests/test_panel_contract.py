@@ -30,6 +30,14 @@ class PanelContractTest(unittest.TestCase):
         model = self.source("app/streaming/panel/panelmodel.cpp")
         self.assertIn('args["device"] = m_PendingInstallDevice', model)
 
+    def test_native_control_centre_exposes_guarded_os_updates(self):
+        model = self.source("app/streaming/panel/panelmodel.cpp")
+        header = self.source("app/streaming/panel/panelmodel.h")
+        self.assertIn('result.value("update_available")', model)
+        self.assertIn('QStringLiteral("Update Moonlight OS")', model)
+        self.assertIn('QStringLiteral("update")', model)
+        self.assertIn("m_UpdateAvailable", header)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

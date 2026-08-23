@@ -311,6 +311,7 @@ private:
     bool m_Persistence = false;
     bool m_InstallAvailable = false;
     bool m_PersistenceAvailable = false;
+    bool m_UpdateAvailable = false;
     bool m_TerminalAvailable = false;
     bool m_SetupLive = false;
     bool m_SetupConfigured = false;
