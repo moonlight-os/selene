@@ -987,8 +987,11 @@ PanelPainter::Model PanelModel::model() const
     if (m_Screen == Screen::Tailscale) {
         out.lines = m_TailscaleLines;
         if (!m_TailscaleLoginUrl.isEmpty()) {
-            out.lines.prepend(m_TailscaleLoginUrl);
-            out.lines.prepend(QStringLiteral("Approve this box on another device:"));
+            out.lines = QStringList{
+                QStringLiteral("Approve this box on another device:"),
+                m_TailscaleLoginUrl,
+            };
+            out.qrCode = m_TailscaleLoginQr;
         }
     }
 
@@ -2881,6 +2884,20 @@ void PanelModel::applyReply(const Request& request, const QJsonObject& reply)
         m_TailscaleLines.clear();
         m_TailscaleState = result.value("state").toString(QStringLiteral("unknown"));
         m_TailscaleLoginUrl = result.value("login_url").toString();
+        m_TailscaleLoginQr = {};
+        const QString qrDataUrl = result.value("login_qr").toString();
+        const QString qrPrefix = QStringLiteral("data:image/png;base64,");
+        if (qrDataUrl.startsWith(qrPrefix) && qrDataUrl.size() <= 262144) {
+            const QByteArray png = QByteArray::fromBase64(
+                qrDataUrl.mid(qrPrefix.size()).toLatin1(),
+                QByteArray::AbortOnBase64DecodingErrors);
+            QImage image;
+            if (image.loadFromData(png, "PNG")
+                    && image.width() > 0 && image.height() > 0
+                    && image.width() <= 1024 && image.height() <= 1024) {
+                m_TailscaleLoginQr = image;
+            }
+        }
         QString name = result.value("name").toString();
         m_TailscaleLines.append(QStringLiteral("State    %1").arg(m_TailscaleState));
         if (!name.isEmpty()) {

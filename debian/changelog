@@ -1,3 +1,11 @@
+selene (6.2.1-1) trixie; urgency=medium
+
+  * Restore the Tailscale approval QR code in the native SDL panel.
+  * Keep keyboard-only live setup inside the install/live choice flow.
+  * Keep the native disk installer alive outside the hardened helper sandbox.
+
+ -- Margot Prego <mopigames@proton.me>  Sun, 23 Aug 2026 22:55:00 +0200
+
 selene (6.2.0-1) trixie; urgency=medium
 
   * Add the native Moonlight OS control centre and updater action.

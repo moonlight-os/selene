@@ -50,6 +50,16 @@
 	</screenshots>
 
 	<releases>
+		<release version="6.2.1" date="2026-08-23">
+			<description>
+				<p>Bugfixes:</p>
+				<ul>
+					<li>Restored the Tailscale approval QR code in the native SDL control centre</li>
+					<li>Kept keyboard-only live setup inside the install/live choice flow</li>
+					<li>Fixed the native disk installer handoff from the hardened appliance helper</li>
+				</ul>
+			</description>
+		</release>
 		<release version="6.2.0" date="2026-08-23">
 			<description>
 				<p>New features:</p>

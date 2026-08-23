@@ -46,6 +46,18 @@ class PanelContractTest(unittest.TestCase):
         self.assertIn('action == "Done"', model)
         self.assertIn("m_RegionReturnsToWelcome ? Screen::Welcome", model)
 
+    def test_tailscale_login_qr_crosses_model_and_painter(self):
+        model = self.source("app/streaming/panel/panelmodel.cpp")
+        header = self.source("app/streaming/panel/panelmodel.h")
+        painter = self.source("app/streaming/panel/panelpainter.cpp")
+        painter_header = self.source("app/streaming/panel/panelpainter.h")
+        self.assertIn('result.value("login_qr")', model)
+        self.assertIn("m_TailscaleLoginQr", header)
+        self.assertIn("out.qrCode = m_TailscaleLoginQr", model)
+        self.assertIn("QImage qrCode", painter_header)
+        self.assertIn("Qt::FastTransformation", painter)
+        self.assertIn("painter.drawImage", painter)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
