@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SUITE="${MLOS_SUITE:-trixie}"
 IMAGE="selene-deb-builder:${SUITE}"
 MSQUIC_VERSION="2.5.9"
-MSQUIC_SHA256="5f2107d3b682cc008ec248e93bc4c00dc4ac674f2e1d4bd5c830bf2d1f1b60a1"
+MSQUIC_SHA256="1baa61ade0b7b4a99f6dcb6b00d9aedb12b5566d00918a325be7425e878e51ba"
 MSQUIC_URL="https://packages.microsoft.com/debian/13/prod/pool/main/libm/libmsquic/libmsquic_${MSQUIC_VERSION}_amd64.deb"
 
 say() { printf '\033[1;35m==>\033[0m %s\n' "$*"; }
