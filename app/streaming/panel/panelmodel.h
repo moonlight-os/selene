@@ -316,6 +316,7 @@ private:
     bool m_SetupLive = false;
     bool m_SetupConfigured = false;
     bool m_WelcomeDone = false;
+    bool m_RegionReturnsToWelcome = false;
     QVector<InstallTarget> m_InstallTargets;
     QString m_PendingInstallDevice;
     QString m_PendingInstallModel;

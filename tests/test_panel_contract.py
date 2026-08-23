@@ -38,6 +38,14 @@ class PanelContractTest(unittest.TestCase):
         self.assertIn('QStringLiteral("update")', model)
         self.assertIn("m_UpdateAvailable", header)
 
+    def test_welcome_keyboard_configuration_returns_to_welcome(self):
+        model = self.source("app/streaming/panel/panelmodel.cpp")
+        header = self.source("app/streaming/panel/panelmodel.h")
+        self.assertIn('"Configure keyboard & time zone"', model)
+        self.assertIn("m_RegionReturnsToWelcome", header)
+        self.assertIn('action == "Done"', model)
+        self.assertIn("m_RegionReturnsToWelcome ? Screen::Welcome", model)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

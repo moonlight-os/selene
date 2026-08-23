@@ -102,6 +102,7 @@ bool PanelModel::isAvailable() const
 
 void PanelModel::reset()
 {
+    m_RegionReturnsToWelcome = false;
     goTo(m_Mode == Mode::FirstRun ? Screen::SetupLoading : Screen::Main);
     m_Hovered = -1;
     m_CloseRequested = false;
@@ -154,6 +155,7 @@ int PanelModel::ask(const QString& op, const QJsonObject& args,
 
 void PanelModel::goTo(Screen screen)
 {
+    if (screen == Screen::Welcome) m_RegionReturnsToWelcome = false;
     m_Screen = screen;
     m_Generation++;
     m_Selected = 0;
@@ -337,8 +339,9 @@ PanelModel::Screen PanelModel::parentScreen() const
     case Screen::Bluetooth:
     case Screen::Usb:
     case Screen::Battery: return Screen::Devices;
-    case Screen::Region: return m_Mode == Mode::FirstRun ? Screen::SetupIntro
-                                                         : Screen::Devices;
+    case Screen::Region: return m_Mode == Mode::FirstRun
+        ? (m_RegionReturnsToWelcome ? Screen::Welcome : Screen::SetupIntro)
+        : Screen::Devices;
     case Screen::KeyboardLayout:
     case Screen::TimeZoneRegion: return Screen::Region;
     case Screen::KeyboardVariant: return Screen::KeyboardLayout;
@@ -432,7 +435,7 @@ QStringList PanelModel::currentItems() const
         return {};
     case Screen::Welcome:
         return { "Try Moonlight OS from this USB", "Install Moonlight OS",
-                 "Set up keyboard, clock, and network" };
+                 "Configure keyboard & time zone" };
     case Screen::SetupIntro:
         return { "Start setup" };
     case Screen::SetupNetwork:
@@ -575,7 +578,10 @@ QStringList PanelModel::currentItems() const
         QStringList items { QStringLiteral("Keyboard\t%1%2").arg(m_KeyboardLayout,
                     m_KeyboardVariant.isEmpty() ? QString() : QStringLiteral(" · %1").arg(m_KeyboardVariant)),
                  QStringLiteral("Time zone\t%1").arg(m_TimeZone), "Check again" };
-        if (m_Mode == Mode::FirstRun) items.append(QStringLiteral("Continue"));
+        if (m_Mode == Mode::FirstRun) {
+            items.append(m_RegionReturnsToWelcome ? QStringLiteral("Done")
+                                                  : QStringLiteral("Continue"));
+        }
         items.append(QStringLiteral("Back"));
         return items;
     }
@@ -1374,19 +1380,23 @@ void PanelModel::activateSelection()
 
     if (m_Screen == Screen::Welcome) {
         if (action == "Install Moonlight OS") {
+            m_RegionReturnsToWelcome = false;
             goTo(Screen::Installer);
             m_InstallTargets.clear();
             ask(QStringLiteral("install.status"), {}, QStringLiteral("Looking for installable disks"),
                 QStringLiteral("The live USB is excluded before anything is shown."));
         }
         else if (action == "Try Moonlight OS from this USB") {
+            m_RegionReturnsToWelcome = false;
             QJsonObject args;
             args["completed"] = true;
             ask(QStringLiteral("welcome.complete"), args,
                 QStringLiteral("Preparing the live session"));
         }
         else {
-            goTo(Screen::SetupIntro);
+            m_RegionReturnsToWelcome = true;
+            goTo(Screen::Region);
+            ask(QStringLiteral("region.status"), {}, QStringLiteral("Reading keyboard and clock"));
         }
         return;
     }
@@ -1400,6 +1410,11 @@ void PanelModel::activateSelection()
     if (m_Screen == Screen::Region && m_Mode == Mode::FirstRun && action == "Continue") {
         goTo(Screen::SetupNetwork);
         ask(QStringLiteral("status"), {}, QStringLiteral("Checking the network"));
+        return;
+    }
+
+    if (m_Screen == Screen::Region && m_Mode == Mode::FirstRun && action == "Done") {
+        goTo(Screen::Welcome);
         return;
     }
 
