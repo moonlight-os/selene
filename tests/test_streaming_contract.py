@@ -20,12 +20,17 @@ class StreamingContractTest(unittest.TestCase):
 
     def test_quic_shutdown_is_single_owner_and_mutex_protected(self):
         transport = self.source("app/streaming/quictransport.cpp")
+        self.assertIn("std::mutex stateMutex", transport)
         self.assertIn("bool shutdownRequested = false", transport)
-        self.assertIn("bool connectionCloseOwnedByStop = false", transport)
         self.assertIn("void shutdownConnection(", transport)
-        self.assertIn("!shutdownRequested", transport)
-        self.assertIn("unfinishedConnection = connection", transport)
+        self.assertIn(
+            "connection != nullptr && !shutdownRequested && !connectionFinished",
+            transport,
+        )
+        self.assertIn("HQUIC connectionToClose = nullptr", transport)
+        self.assertIn("connectionToClose = connection", transport)
         self.assertIn("connection = nullptr", transport)
+        self.assertEqual(transport.count("ConnectionClose("), 1)
 
 
 if __name__ == "__main__":

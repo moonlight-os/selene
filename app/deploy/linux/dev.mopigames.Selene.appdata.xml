@@ -50,6 +50,21 @@
 	</screenshots>
 
 	<releases>
+		<release version="6.2.0" date="2026-08-23">
+			<description>
+				<p>New features:</p>
+				<ul>
+					<li>Added an in-client Moonlight OS control centre with system update support</li>
+					<li>Added native USB, camera, microphone, and QUIC transport integration</li>
+					<li>Added portable Windows ARM64 builds alongside Windows x64, macOS, and Linux AppImage builds</li>
+				</ul>
+				<p>Bugfixes:</p>
+				<ul>
+					<li>Hardened QUIC and native USB teardown to prevent session crashes</li>
+					<li>Fixed portable runtime dependency packaging across supported platforms</li>
+				</ul>
+			</description>
+		</release>
 		<release version="6.1.0" date="2024-09-16">
 			<description>
 				<p>New features:</p>

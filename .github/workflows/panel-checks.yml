@@ -17,3 +17,4 @@ jobs:
         with:
           submodules: recursive
       - run: python3 tests/test_panel_contract.py
+      - run: python3 tests/test_streaming_contract.py
