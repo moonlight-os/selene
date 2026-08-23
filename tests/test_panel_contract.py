@@ -58,6 +58,15 @@ class PanelContractTest(unittest.TestCase):
         self.assertIn("Qt::FastTransformation", painter)
         self.assertIn("painter.drawImage", painter)
 
+    def test_first_run_prefers_active_ethernet_over_wifi_setup(self):
+        model = self.source("app/streaming/panel/panelmodel.cpp")
+        header = self.source("app/streaming/panel/panelmodel.h")
+        self.assertIn("QString m_ConnectionType", header)
+        self.assertIn('m_ConnectionType == QLatin1String("ethernet")', model)
+        self.assertIn('"Continue with Ethernet", "Use Wi-Fi instead", "Back"', model)
+        self.assertIn('action == "Continue with Ethernet"', model)
+        self.assertIn('result.value("connection_type")', model)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

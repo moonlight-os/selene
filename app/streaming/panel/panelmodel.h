@@ -300,6 +300,7 @@ private:
     int m_ActivityFrame;
 
     QStringList m_StatusLines;
+    QString m_ConnectionType;
     QStringList m_TailscaleLines;
     QString m_TailscaleState;
     QString m_TailscaleLoginUrl;
