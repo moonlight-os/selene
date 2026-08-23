@@ -23,6 +23,11 @@ fi
 command -v qmake6 >/dev/null 2>&1 || fail "Unable to find 'qmake6' in your PATH!"
 command -v $LINUXDEPLOY >/dev/null 2>&1 || fail "Unable to find '$LINUXDEPLOY' in your PATH!"
 [ -f "$MSQUIC_LIBRARY" ] || fail "MSQUIC_LIBRARY must point to the pinned MsQuic runtime!"
+# linuxdeploy resolves the executable's DT_NEEDED entries before it processes
+# --library arguments. Make the extracted runtime's SONAME visible during
+# that first dependency scan; --library below still copies it into the image.
+MSQUIC_LIBRARY_DIR=$(dirname "$MSQUIC_LIBRARY")
+export LD_LIBRARY_PATH="$MSQUIC_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 echo Cleaning output directories
 rm -rf $BUILD_FOLDER

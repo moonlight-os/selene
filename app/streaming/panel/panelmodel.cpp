@@ -2487,7 +2487,11 @@ bool PanelModel::applyUsb(const QJsonObject& result)
     bool wasAuto = m_UsbAuto;
     QString previousPolicy = m_UsbAutoPolicy;
 
-    m_UsbPaired = result.value("paired").toBool();
+    // Helios carries USB offers inside the authenticated streaming session.
+    // `paired` is only the retired TCP agent and remains as a compatibility
+    // fallback for an older appliance helper.
+    m_UsbPaired = result.value("native_transport").toBool()
+            || result.value("paired").toBool();
     m_UsbAuto = result.value("autoshare").toBool();
     m_UsbAutoPolicy = result.value("autoshare_policy").toString(QStringLiteral("safe"));
 
