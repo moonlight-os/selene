@@ -1,4 +1,5 @@
 #include "nvcomputer.h"
+#include "streaming/quictransport.h"
 #include <Limelight.h>
 
 #include <QDebug>
@@ -234,6 +235,10 @@ NvHTTP::startApp(QString verb,
                                    "&remoteControllersBitmap="+QString::number(gamepadMask)+
                                    "&gcmap="+QString::number(gamepadMask)+
                                    "&gcpersist="+QString::number(persistGameControllersOnDisconnect ? 1 : 0)+
+                                   // Vanilla hosts ignore unknown query parameters. A QUIC-capable
+                                   // Helios may answer with quic:// in sessionUrl0; otherwise the
+                                   // existing RTSP/ENet/UDP transport remains selected.
+                                   (QuicTransport::isAvailable() ? "&mlosQuic=1" : "")+
                                    LiGetLaunchUrlQueryParameters(),
                                    LAUNCH_TIMEOUT_MS);
 

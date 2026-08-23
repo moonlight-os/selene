@@ -179,6 +179,77 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
     char modifiers;
     bool shouldNotConvertToScanCodeOnServer = false;
 
+    // The settings panel comes first, and ahead of the repeat filter below.
+    //
+    // Repeats are dropped for streaming because the host does its own key
+    // repeating, and forwarding ours would double it. A text field is the one
+    // place in this client where a held key has to repeat -- backspace in a
+    // Wi-Fi password, arrows down a list of networks -- and letting SDL's
+    // repeats through gives the compositor's own delay-then-accelerate
+    // behaviour rather than a hand-rolled timer.
+    //
+    // Ctrl+Alt+M rather than the Ctrl+Alt+Shift+<key> the other combos use:
+    // it is the combination Moonlight OS has always used for this, and users
+    // have it in their fingers. The compositor used to bind it and launch an
+    // external terminal; with the panel inside the client, sway must stop
+    // binding it so the key arrives here instead.
+#ifdef HAS_PANEL
+    if (m_Panel != nullptr) {
+        if (m_Panel->isOpen()) {
+            bool handled = m_Panel->handleKey(event);
+
+            // Closing gives the mouse back to the stream. Done here because
+            // the panel has no business knowing about capture modes, and this
+            // is where the key that closed it was seen.
+            if (!m_Panel->isOpen()) {
+                setCaptureActive(true);
+            }
+
+            if (handled) {
+                return;
+            }
+        }
+        else if (event->state == SDL_PRESSED && !event->repeat &&
+                 (event->keysym.mod & KMOD_CTRL) &&
+                 (event->keysym.mod & KMOD_ALT) &&
+                 !(event->keysym.mod & KMOD_SHIFT) &&
+                 (event->keysym.sym == SDLK_m || event->keysym.scancode == SDL_SCANCODE_M)) {
+            // Both, and the reason is AZERTY.
+            //
+            // The keysym follows the letter: on a French layout the key
+            // printed M reports SDLK_m, and that is the key a user reaches
+            // for. Its scancode is SDL_SCANCODE_SEMICOLON, because scancodes
+            // are positions on a US keyboard -- so matching the scancode
+            // alone misses the very keyboard this appliance goes out of its
+            // way to support. Matching the scancode as well keeps the same
+            // physical key working on a layout where the symbol has moved
+            // instead. sway's own binding resolves the symbol for the same
+            // reason, via --to-code.
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Settings panel requested");
+            if (m_Panel->open()) {
+                // Give the pointer back to the user. While streaming, the
+                // cursor is either captured in relative mode or simply
+                // hidden, so without this the panel has mouse support that
+                // nobody can see to use.
+                setCaptureActive(false);
+                SDL_ShowCursor(SDL_ENABLE);
+                // The host has already seen Ctrl and Alt go down, and it is
+                // never going to see them come up: the panel swallows every
+                // key while it is open, releases included. Without this the
+                // host is left holding both modifiers for the rest of the
+                // session, and every later keystroke arrives as a chord --
+                // which looks exactly like "the keyboard stopped working".
+                raiseAllKeys();
+                return;
+            }
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "No appliance helper, so there is no panel to open");
+        }
+    }
+
+
+#endif
+
     if (event->repeat) {
         // Ignore repeat key down events
         SDL_assert(event->state == SDL_PRESSED);

@@ -246,6 +246,14 @@ void SdlRenderer::renderOverlay(Overlay::OverlayType type)
                 m_OverlayRects[type].x = 0;
                 m_OverlayRects[type].y = 0;
             }
+            else {
+                // The settings panel, centred. PanelMenu centres its
+                // hit-testing to match.
+                SDL_Rect viewportRect;
+                SDL_RenderGetViewport(m_Renderer, &viewportRect);
+                m_OverlayRects[type].x = (viewportRect.w - newSurface->w) / 2;
+                m_OverlayRects[type].y = (viewportRect.h - newSurface->h) / 2;
+            }
 
             m_OverlayRects[type].w = newSurface->w;
             m_OverlayRects[type].h = newSurface->h;

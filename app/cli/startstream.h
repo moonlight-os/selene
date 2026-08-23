@@ -22,6 +22,7 @@ class Launcher : public QObject
 public:
     explicit Launcher(QString computer, QString app,
                       StreamingPreferences* preferences,
+                      int displayIndex,
                       QObject *parent = nullptr);
     ~Launcher();
     Q_INVOKABLE void execute(ComputerManager *manager);

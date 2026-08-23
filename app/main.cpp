@@ -40,6 +40,9 @@
 #endif
 
 #include "cli/listapps.h"
+#ifdef HAS_PANEL
+#include "streaming/panel/panelwindow.h"
+#endif
 #include "cli/quitstream.h"
 #include "cli/startstream.h"
 #include "cli/pair.h"
@@ -48,6 +51,7 @@
 #include "utils.h"
 #include "gui/computermodel.h"
 #include "gui/appmodel.h"
+#include "gui/selenetheme.h"
 #include "backend/autoupdatechecker.h"
 #include "backend/computermanager.h"
 #include "backend/systemproperties.h"
@@ -540,7 +544,6 @@ int main(int argc, char *argv[])
 #endif
     }
     else {
-#ifndef STEAM_LINK
         if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
             qInfo() << "Unable to detect Wayland or X11, so EGLFS will be used by default. Set QT_QPA_PLATFORM to override this.";
             qputenv("QT_QPA_PLATFORM", "eglfs");
@@ -574,7 +577,6 @@ int main(int argc, char *argv[])
         // even have working OpenGL implementations, so GLES is the only option.
         // See https://github.com/moonlight-stream/moonlight-qt/issues/868
         SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
-#endif
     }
 
     bool forceGles;
@@ -679,10 +681,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-#if defined(STEAM_LINK) || defined(Q_OS_WIN32)
-    // Steam Link requires that we initialize video before creating our
-    // QGuiApplication in order to configure the framebuffer correctly.
-    //
+#if defined(Q_OS_WIN32)
     // We keep the video subsystem initialized on Windows because it's
     // much more costly to reinitialize than other platforms. It hurts
     // the settings page transition performance significantly.
@@ -882,34 +881,18 @@ int main(int argc, char *argv[])
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Detected Wayland");
         qputenv("SDL_VIDEODRIVER", "wayland");
     }
-#ifndef STEAM_LINK
     // Force use of the KMSDRM backend for SDL when using Qt platform plugins
     // that directly draw to the display without a windowing system.
     else if (QGuiApplication::platformName() == "eglfs" || QGuiApplication::platformName() == "linuxfb") {
         qputenv("SDL_VIDEODRIVER", "kmsdrm");
     }
-#endif
 
 #ifdef HAVE_DRM_MASTER_HOOKS
     // Only use the Qt-SDL DRM master interoperability hooks if Qt is using KMS
     g_DisableDrmHooks = QGuiApplication::platformName() != "eglfs";
 #endif
 
-#ifdef STEAM_LINK
-    // Qt 5.9 from the Steam Link SDK is not able to load any fonts
-    // since the Steam Link doesn't include any of the ones it looks
-    // for. We know it has NotoSans so we will explicitly ask for that.
-    if (app.font().family().isEmpty()) {
-        qWarning() << "SL HACK: No default font - using NotoSans";
-
-        QFont fon("NotoSans");
-        app.setFont(fon);
-    }
-
-    // Move the mouse to the bottom right so it's invisible when using
-    // gamepad-only navigation.
-    QCursor().setPos(0xFFFF, 0xFFFF);
-#elif !SDL_VERSION_ATLEAST(2, 0, 11) && defined(Q_OS_LINUX) && (defined(__arm__) || defined(__aarch64__))
+#if !SDL_VERSION_ATLEAST(2, 0, 11) && defined(Q_OS_LINUX) && (defined(__arm__) || defined(__aarch64__))
     if (qgetenv("SDL_VIDEO_GL_DRIVER").isEmpty() && QGuiApplication::platformName() == "eglfs") {
         // Look for Raspberry Pi GLES libraries. SDL 2.0.10 and earlier needs some help finding
         // the correct libraries for the KMSDRM backend if not compiled with the RPI backend enabled.
@@ -936,6 +919,10 @@ int main(int argc, char *argv[])
     // Register our C++ types for QML
     qmlRegisterType<ComputerModel>("ComputerModel", 1, 0, "ComputerModel");
     qmlRegisterType<AppModel>("AppModel", 1, 0, "AppModel");
+    qmlRegisterSingletonType<SeleneTheme>("SeleneTheme", 1, 0, "SeleneTheme",
+                                         [](QQmlEngine*, QJSEngine*) -> QObject* {
+                                             return new SeleneTheme();
+                                         });
     qmlRegisterUncreatableType<Session>("Session", 1, 0, "Session", "Session cannot be created from QML");
     qmlRegisterSingletonType<ComputerManager>("ComputerManager", 1, 0,
                                               "ComputerManager",
@@ -1002,7 +989,8 @@ int main(int argc, char *argv[])
             streamParser.parse(app.arguments(), preferences);
             QString host    = streamParser.getHost();
             QString appName = streamParser.getAppName();
-            auto launcher   = new CliStartStream::Launcher(host, appName, preferences, &app);
+            auto launcher   = new CliStartStream::Launcher(host, appName, preferences,
+                                                            streamParser.getDisplayIndex(), &app);
             engine.rootContext()->setContextProperty("launcher", launcher);
             break;
         }
@@ -1031,6 +1019,33 @@ int main(int argc, char *argv[])
             auto launcher = new CliListApps::Launcher(listParser.getHost(), listParser, &app);
             launcher->execute(new ComputerManager(StreamingPreferences::get()));
             hasGUI = false;
+            break;
+        }
+    case GlobalCommandLineParser::PanelRequested:
+    case GlobalCommandLineParser::SetupRequested:
+        {
+#ifdef HAS_PANEL
+            // The appliance settings panel, as a window rather than as an
+            // overlay. The QML engine is not involved: this is the same
+            // PanelModel and PanelPainter the in-stream panel uses, so there
+            // is one interface instead of two that drift apart.
+            auto panel = new PanelWindow(
+                commandLineParserResult == GlobalCommandLineParser::SetupRequested
+                    ? PanelModel::Mode::FirstRun : PanelModel::Mode::ControlCentre);
+            if (!panel->isAvailable()) {
+                // No helper means this is not a Moonlight OS appliance, and
+                // a window that can do nothing is worse than a clear refusal.
+                fprintf(stderr, "No Moonlight OS helper is running, so there is no panel to show.\n");
+                delete panel;
+                return 1;
+            }
+
+            panel->showFullScreen();
+            hasGUI = false;
+#else
+            fprintf(stderr, "This build has no settings panel.\n");
+            return 1;
+#endif
             break;
         }
     }

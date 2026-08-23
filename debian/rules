@@ -11,7 +11,9 @@ QMAKE_CONFIG = release
 	dh $@
 
 override_dh_auto_configure:
-	qmake6 PREFIX=/usr CONFIG+=$(QMAKE_CONFIG) $(CURDIR)/selene.pro
+	qmake6 PREFIX=/usr CONFIG+=$(QMAKE_CONFIG) \
+		MSQUIC_LIBRARY=/usr/lib/x86_64-linux-gnu/libmsquic.so.2 \
+		$(CURDIR)/selene.pro
 
 override_dh_auto_test:
 	# no test suite

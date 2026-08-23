@@ -8,6 +8,7 @@ import ComputerManager 1.0
 import StreamingPreferences 1.0
 import SystemProperties 1.0
 import SdlGamepadKeyNavigation 1.0
+import SeleneTheme 1.0
 
 CenteredGridView {
     property ComputerModel computerModel : createModel()
@@ -15,10 +16,10 @@ CenteredGridView {
     id: pcGrid
     focus: true
     activeFocusOnTab: true
-    topMargin: 20
-    bottomMargin: 5
-    cellWidth: 310; cellHeight: 330;
-    objectName: qsTr("Computers")
+    topMargin: 28
+    bottomMargin: 18
+    cellWidth: 330; cellHeight: 330;
+    objectName: qsTr("Your hosts")
 
     Component.onCompleted: {
         // Don't show any highlighted item until interacting with them.
@@ -99,6 +100,7 @@ CenteredGridView {
             text: StreamingPreferences.enableMdns ? qsTr("Searching for compatible hosts on your local network...")
                                                   : qsTr("Automatic PC discovery is disabled. Add your PC manually.")
             font.pointSize: 20
+            color: SeleneTheme.muted
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
         }
@@ -107,7 +109,7 @@ CenteredGridView {
     model: computerModel
 
     delegate: NavigableItemDelegate {
-        width: 300; height: 320;
+        width: 318; height: 318;
         grid: pcGrid
 
         property alias pcContextMenu : pcContextMenuLoader.item
@@ -115,10 +117,12 @@ CenteredGridView {
         Image {
             id: pcIcon
             anchors.horizontalCenter: parent.horizontalCenter
+            y: 30
+            opacity: model.online ? 0.94 : 0.48
             source: "qrc:/res/desktop_windows-48px.svg"
             sourceSize {
-                width: 200
-                height: 200
+                width: 164
+                height: 164
             }
         }
 
@@ -153,11 +157,39 @@ CenteredGridView {
 
             width: parent.width
             anchors.top: pcIcon.bottom
-            anchors.bottom: parent.bottom
-            font.pointSize: 36
+            anchors.topMargin: 8
+            height: 54
+            color: SeleneTheme.text
+            font.pointSize: 25
+            font.weight: Font.DemiBold
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             elide: Text.ElideRight
+        }
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 22
+            width: statusText.implicitWidth + 24
+            height: 30
+            radius: 15
+            color: model.statusUnknown ? SeleneTheme.hover :
+                   (model.online ? Qt.rgba(SeleneTheme.success.r, SeleneTheme.success.g,
+                                           SeleneTheme.success.b, 0.16) : SeleneTheme.hover)
+            border.width: 1
+            border.color: model.online ? SeleneTheme.success : SeleneTheme.border
+
+            Label {
+                id: statusText
+                anchors.centerIn: parent
+                text: model.statusUnknown ? qsTr("Checking") :
+                      (model.online ? (model.paired ? qsTr("Ready to stream") : qsTr("Pair host"))
+                                    : qsTr("Offline"))
+                color: model.online ? SeleneTheme.success : SeleneTheme.muted
+                font.pointSize: 10
+                font.weight: Font.DemiBold
+            }
         }
 
         Loader {

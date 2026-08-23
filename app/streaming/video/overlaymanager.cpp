@@ -15,6 +15,11 @@ OverlayManager::OverlayManager() :
     m_Overlays[OverlayType::OverlayStatusUpdate].color = {0xCC, 0x00, 0x00, 0xFF};
     m_Overlays[OverlayType::OverlayStatusUpdate].fontSize = 36;
 
+    // White and larger than the debug overlay: this one is read deliberately
+    // rather than glanced at, and it is the whole interface while it is up.
+    m_Overlays[OverlayType::OverlayPanel].color = {0xFF, 0xFF, 0xFF, 0xFF};
+    m_Overlays[OverlayType::OverlayPanel].fontSize = 28;
+
     // While TTF will usually not be initialized here, it is valid for that not to
     // be the case, since Session destruction is deferred and could overlap with
     // the lifetime of a new Session object.
@@ -111,6 +116,88 @@ SDL_Color OverlayManager::getOverlayColor(OverlayType type)
     return m_Overlays[type].color;
 }
 
+void OverlayManager::setOverlaySurface(OverlayType type, SDL_Surface* surface)
+{
+    SDL_Surface* oldSurface = (SDL_Surface*)SDL_AtomicSetPtr(
+        (void**)&m_Overlays[type].surface, surface);
+
+    if (m_Renderer != nullptr) {
+        m_Renderer->notifyOverlayUpdated(type);
+    }
+
+    if (oldSurface != nullptr) {
+        SDL_FreeSurface(oldSurface);
+    }
+}
+
+void OverlayManager::setPanelSelectedLine(int line)
+{
+    m_PanelSelectedLine = line;
+}
+
+/**
+ * Wrap the panel's text in something that looks deliberate.
+ *
+ * All of this lives in the surface rather than in the renderers, and that is
+ * the point: there are eight renderers and each composites overlays in its own
+ * API. Anything drawn here works under all of them, including the ones nobody
+ * remembered to update.
+ */
+SDL_Surface* OverlayManager::decorateAsPanel(SDL_Surface* text, int selectedLine, int lineHeight)
+{
+    if (text == nullptr) {
+        return nullptr;
+    }
+
+    const int padding = 28;
+    const int border = 2;
+
+    SDL_Surface* card = SDL_CreateRGBSurfaceWithFormat(0,
+                                                       text->w + padding * 2,
+                                                       text->h + padding * 2,
+                                                       32,
+                                                       SDL_PIXELFORMAT_ARGB8888);
+    if (card == nullptr) {
+        return text;
+    }
+
+    // Dark and mostly opaque: it sits over moving video, and a panel you have
+    // to squint past the game to read is not a panel.
+    SDL_FillRect(card, nullptr, SDL_MapRGBA(card->format, 0x10, 0x10, 0x14, 0xE8));
+
+    SDL_Rect inner = { border, border, card->w - border * 2, card->h - border * 2 };
+    SDL_FillRect(card, &inner, SDL_MapRGBA(card->format, 0x10, 0x10, 0x14, 0xE8));
+
+    SDL_Rect edge = { 0, 0, card->w, border };
+    Uint32 edgeColor = SDL_MapRGBA(card->format, 0xFF, 0xFF, 0xFF, 0x33);
+    SDL_FillRect(card, &edge, edgeColor);
+    edge.y = card->h - border;
+    SDL_FillRect(card, &edge, edgeColor);
+    edge = { 0, 0, border, card->h };
+    SDL_FillRect(card, &edge, edgeColor);
+    edge.x = card->w - border;
+    SDL_FillRect(card, &edge, edgeColor);
+
+    // A bar behind the selected row. The caller counts lines; this only has
+    // to know how tall one is.
+    if (selectedLine >= 0 && lineHeight > 0) {
+        SDL_Rect highlight = {
+            padding / 2,
+            padding + selectedLine * lineHeight,
+            card->w - padding,
+            lineHeight,
+        };
+        SDL_FillRect(card, &highlight, SDL_MapRGBA(card->format, 0xFF, 0xFF, 0xFF, 0x24));
+    }
+
+    SDL_Rect at = { padding, padding, text->w, text->h };
+    SDL_SetSurfaceBlendMode(text, SDL_BLENDMODE_BLEND);
+    SDL_BlitSurface(text, nullptr, card, &at);
+    SDL_FreeSurface(text);
+
+    return card;
+}
+
 void OverlayManager::setOverlayRenderer(IOverlayRenderer* renderer)
 {
     m_Renderer = renderer;
@@ -144,18 +231,26 @@ void OverlayManager::notifyOverlayUpdated(OverlayType type)
         }
     }
 
+    SDL_Surface* newSurface = nullptr;
+    if (m_Overlays[type].enabled) {
+        // The _Wrapped variant is required for line breaks to work
+        newSurface = RenderTextOutlinedWrapped(m_Overlays[type].font,
+                                               m_Overlays[type].text,
+                                               m_Overlays[type].color,
+                                               {0, 0, 0, 255},
+                                               4,
+                                               1024);
+
+        if (type == OverlayType::OverlayPanel) {
+            newSurface = decorateAsPanel(newSurface,
+                                         m_PanelSelectedLine,
+                                         TTF_FontLineSkip(m_Overlays[type].font));
+        }
+    }
+
     // Exchange the old surface with the new one
     SDL_Surface* oldSurface = (SDL_Surface*)SDL_AtomicSetPtr(
-        (void**)&m_Overlays[type].surface,
-        m_Overlays[type].enabled ?
-            // The _Wrapped variant is required for line breaks to work
-            RenderTextOutlinedWrapped(m_Overlays[type].font,
-                                      m_Overlays[type].text,
-                                      m_Overlays[type].color,
-                                      {0, 0, 0, 255},
-                                      4,
-                                      1024)
-            : nullptr);
+        (void**)&m_Overlays[type].surface, newSurface);
 
     // Notify the renderer
     m_Renderer->notifyOverlayUpdated(type);

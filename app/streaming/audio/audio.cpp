@@ -1,11 +1,8 @@
 #include "../session.h"
 #include "renderers/renderer.h"
 
-#ifdef HAVE_SLAUDIO
-#include "renderers/slaud.h"
-#endif
-
 #include "renderers/sdl.h"
+#include "microphone.h"
 
 #include <Limelight.h>
 
@@ -25,12 +22,6 @@ IAudioRenderer* Session::createAudioRenderer(const POPUS_MULTISTREAM_CONFIGURATI
         TRY_INIT_RENDERER(SdlAudioRenderer, opusConfig)
         return nullptr;
     }
-#if defined(HAVE_SLAUDIO)
-    else if (mlAudio == "slaudio") {
-        TRY_INIT_RENDERER(SLAudioRenderer, opusConfig)
-        return nullptr;
-    }
-#endif
     else if (!mlAudio.isEmpty()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "Unknown audio backend: %s",
@@ -39,11 +30,6 @@ IAudioRenderer* Session::createAudioRenderer(const POPUS_MULTISTREAM_CONFIGURATI
     }
 
     // -------------- Automatic backend selection below this line ---------------
-
-#if defined(HAVE_SLAUDIO)
-    // Steam Link should always have SLAudio
-    TRY_INIT_RENDERER(SLAudioRenderer, opusConfig)
-#endif
 
     // Default to SDL
     TRY_INIT_RENDERER(SdlAudioRenderer, opusConfig)
@@ -90,6 +76,11 @@ bool Session::initializeAudioRenderer()
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "Audio stream has %d channels",
                 m_ActiveAudioConfig.channelCount);
+
+    m_MicrophoneCapturer = std::make_unique<MicrophoneCapturer>();
+    if (!m_MicrophoneCapturer->start()) {
+        m_MicrophoneCapturer.reset();
+    }
     return true;
 }
 
@@ -101,11 +92,6 @@ int Session::getAudioRendererCapabilities(int audioConfiguration)
 
     // All audio renderers support arbitrary audio duration
     caps |= CAPABILITY_SUPPORTS_ARBITRARY_AUDIO_DURATION;
-
-#ifdef STEAM_LINK
-    // Steam Link devices have slow Opus decoders
-    caps |= CAPABILITY_SLOW_OPUS_DECODER;
-#endif
 
     return caps;
 }
@@ -133,6 +119,9 @@ int Session::arInit(int /* audioConfiguration */,
                     const POPUS_MULTISTREAM_CONFIGURATION opusConfig,
                     void* /* arContext */, int /* arFlags */)
 {
+    if (s_ActiveSession->m_AudioDisabled) {
+        return 0;
+    }
     SDL_memcpy(&s_ActiveSession->m_OriginalAudioConfig, opusConfig, sizeof(*opusConfig));
     s_ActiveSession->initializeAudioRenderer();
     return 0;
@@ -140,10 +129,14 @@ int Session::arInit(int /* audioConfiguration */,
 
 void Session::arCleanup()
 {
+    s_ActiveSession->m_MicrophoneCapturer.reset();
+
     delete s_ActiveSession->m_AudioRenderer;
     s_ActiveSession->m_AudioRenderer = nullptr;
 
-    opus_multistream_decoder_destroy(s_ActiveSession->m_OpusDecoder);
+    if (s_ActiveSession->m_OpusDecoder != nullptr) {
+        opus_multistream_decoder_destroy(s_ActiveSession->m_OpusDecoder);
+    }
     s_ActiveSession->m_OpusDecoder = nullptr;
 }
 
@@ -151,11 +144,8 @@ void Session::arDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int samplesDecoded;
 
-#ifndef STEAM_LINK
     // Set this thread to high priority to reduce the chance of missing
-    // our sample delivery time. On Steam Link, this causes starvation
-    // of other threads due to severely restricted CPU time available,
-    // so we will skip it on that platform.
+    // our sample delivery time.
     if (s_ActiveSession->m_AudioSampleCount == 0) {
         if (SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH) < 0) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
@@ -163,7 +153,6 @@ void Session::arDecodeAndPlaySample(char* sampleData, int sampleLength)
                         SDL_GetError());
         }
     }
-#endif
 
     // See if we need to drop this sample
     if (s_ActiveSession->m_DropAudioEndTime != 0) {

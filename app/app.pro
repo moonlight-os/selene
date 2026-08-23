@@ -35,6 +35,15 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
+# M7 remains an additive build capability. Release jobs pass the pinned MsQuic
+# library path; local builds without it keep the vanilla carriers and do not
+# advertise QUIC during launch.
+!isEmpty(MSQUIC_LIBRARY) {
+    DEFINES += HAVE_MSQUIC=1
+    INCLUDEPATH += $$PWD/../libs/msquic/include
+    LIBS += $$MSQUIC_LIBRARY
+}
+
 win32 {
     !exists($$PWD/../libs/windows) {
         error("Missing dependencies. Please run 'powershell .\setup-deps.ps1' to fetch prebuilt libraries.")
@@ -65,10 +74,7 @@ unix:if(!macx|disable-prebuilts) {
     CONFIG += link_pkgconfig
     PKGCONFIG += openssl sdl2 SDL2_ttf
 
-    # We have our own optimized libopus.a for Steam Link
-    if(!config_SL|disable-prebuilts) {
-        PKGCONFIG += opus
-    }
+    PKGCONFIG += opus
 
     !disable-ffmpeg {
         packagesExist(libavcodec) {
@@ -192,8 +198,12 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/clipboard.cpp \
+    streaming/quictransport.cpp \
+    streaming/usbtunnelclient.cpp \
     streaming/session.cpp \
     streaming/audio/audio.cpp \
+    streaming/audio/microphone.cpp \
+    streaming/video/camera.cpp \
     streaming/audio/renderers/sdlaud.cpp \
     gui/computermodel.cpp \
     gui/appmodel.cpp \
@@ -230,8 +240,12 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/clipboard.h \
+    streaming/quictransport.h \
+    streaming/usbtunnelclient.h \
     streaming/session.h \
     streaming/audio/renderers/renderer.h \
+    streaming/audio/microphone.h \
+    streaming/video/camera.h \
     streaming/audio/renderers/sdl.h \
     gui/computermodel.h \
     gui/appmodel.h \
@@ -369,26 +383,6 @@ config_EGL {
     HEADERS += \
         streaming/video/ffmpeg-renderers/eglvid.h \
         streaming/video/ffmpeg-renderers/eglimagefactory.h
-}
-config_SL {
-    message(Steam Link build configuration selected)
-
-    !disable-prebuilts {
-        # Link against our NEON-optimized libopus build
-        LIBS += -L$$PWD/../libs/steamlink/lib
-        INCLUDEPATH += $$PWD/../libs/steamlink/include
-        LIBS += -lopus -larmasm -lNE10
-    }
-
-    DEFINES += EMBEDDED_BUILD STEAM_LINK HAVE_SLVIDEO HAVE_SLAUDIO
-    LIBS += -lSLVideo -lSLAudio
-
-    SOURCES += \
-        streaming/video/slvid.cpp \
-        streaming/audio/renderers/slaud.cpp
-    HEADERS += \
-        streaming/video/slvid.h \
-        streaming/audio/renderers/slaud.h
 }
 win32 {
     HEADERS += streaming/video/ffmpeg-renderers/dxutil.h
@@ -582,3 +576,30 @@ macx {
 
 VERSION = "$$cat(version.txt)"
 DEFINES += VERSION_STR=\\\"$$cat(version.txt)\\\"
+
+# Semantic colours are shared by the QML application and the native
+# in-stream panel. Keeping this outside HAS_PANEL also makes the contract
+# available on platforms where the appliance panel is not built.
+SOURCES += gui/selenetheme.cpp
+HEADERS += gui/selenetheme.h
+
+# The Moonlight OS settings panel talks to a privileged helper over a unix
+# socket and asks a Wayland compositor for a hotkey. Neither exists on
+# Windows, and building it there means porting an appliance feature to a
+# platform that has no appliance. HAS_PANEL is what the rest of the code
+# tests, so a build without it simply has no panel rather than a stubbed one.
+unix {
+    DEFINES += HAS_PANEL
+
+    SOURCES += streaming/panel/helperclient.cpp \
+               streaming/panel/panelmenu.cpp \
+               streaming/panel/panelmodel.cpp \
+               streaming/panel/panelpainter.cpp \
+               streaming/panel/panelwindow.cpp
+
+    HEADERS += streaming/panel/helperclient.h \
+               streaming/panel/panelmenu.h \
+               streaming/panel/panelmodel.h \
+               streaming/panel/panelpainter.h \
+               streaming/panel/panelwindow.h
+}

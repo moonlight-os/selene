@@ -54,6 +54,7 @@ SOURCES += \
     $$COMMON_C_DIR/nanors/deps/obl/oblas_lite.c \
     $$COMMON_C_DIR/nanors/rs.c \
     $$COMMON_C_DIR/src/AudioStream.c \
+    $$COMMON_C_DIR/src/CameraStream.c \
     $$COMMON_C_DIR/src/ByteBuffer.c \
     $$COMMON_C_DIR/src/Connection.c \
     $$COMMON_C_DIR/src/ConnectionTester.c \
@@ -61,7 +62,9 @@ SOURCES += \
     $$COMMON_C_DIR/src/FakeCallbacks.c \
     $$COMMON_C_DIR/src/InputStream.c \
     $$COMMON_C_DIR/src/LinkedBlockingQueue.c \
+    $$COMMON_C_DIR/src/MlosQuicWire.c \
     $$COMMON_C_DIR/src/Misc.c \
+    $$COMMON_C_DIR/src/MicrophoneStream.c \
     $$COMMON_C_DIR/src/Platform.c \
     $$COMMON_C_DIR/src/PlatformCrypto.c \
     $$COMMON_C_DIR/src/PlatformSockets.c \
@@ -74,7 +77,8 @@ SOURCES += \
     $$COMMON_C_DIR/src/VideoDepacketizer.c \
     $$COMMON_C_DIR/src/VideoStream.c
 HEADERS += \
-    $$COMMON_C_DIR/src/Limelight.h
+    $$COMMON_C_DIR/src/Limelight.h \
+    $$COMMON_C_DIR/src/MlosQuicWire.h
 INCLUDEPATH += \
     $$ENET_DIR/include \
     $$COMMON_C_DIR/src \

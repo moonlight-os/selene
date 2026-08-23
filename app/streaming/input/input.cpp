@@ -34,6 +34,9 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
       m_DragTimer(0),
       m_DragButton(0),
       m_NumFingersDown(0)
+#ifdef HAS_PANEL
+      , m_Panel(new PanelMenu())
+#endif
 {
     // System keys are always captured when running without a DE
     if (!WMUtils::isRunningDesktopEnvironment()) {
@@ -218,6 +221,15 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
 
 SdlInputHandler::~SdlInputHandler()
 {
+#ifdef HAS_PANEL
+    if (m_Panel != nullptr) {
+        // Hand the key back before going away, or the appliance is left with
+        // no way to open a panel at all.
+        m_Panel->releaseHotkey();
+    }
+    delete m_Panel;
+#endif
+
     for (int i = 0; i < MAX_GAMEPADS; i++) {
         if (m_GamepadState[i].mouseEmulationTimer != 0) {
             Session::get()->notifyMouseEmulationMode(false);
@@ -256,18 +268,42 @@ SdlInputHandler::~SdlInputHandler()
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, m_OldIgnoreDevices.toUtf8());
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT, m_OldIgnoreDevicesExcept.toUtf8());
 
-#ifdef STEAM_LINK
-    // Hide SDL's cursor on Steam Link after quitting the stream.
-    // FIXME: We should also do this for other situations where SDL
-    // and Qt will draw their own mouse cursors like KMSDRM or RPi
-    // video backends.
-    SDL_ShowCursor(SDL_DISABLE);
+}
+
+bool SdlInputHandler::handleTextInput(const char* text)
+{
+#ifdef HAS_PANEL
+    return m_Panel != nullptr && m_Panel->handleTextInput(text);
+#else
+    (void)text;
+    return false;
+#endif
+}
+
+void SdlInputHandler::pollPanel()
+{
+#ifdef HAS_PANEL
+    if (m_Panel != nullptr) {
+        m_Panel->poll();
+    }
 #endif
 }
 
 void SdlInputHandler::setWindow(SDL_Window *window)
 {
     m_Window = window;
+
+    // The panel needs it to work out where it is drawn: the renderers centre
+    // it, and a click is tested against that same centre.
+#ifdef HAS_PANEL
+    if (m_Panel != nullptr) {
+        m_Panel->setWindow(window);
+        m_Panel->setStreamSize(m_StreamWidth, m_StreamHeight);
+
+        // The window exists, so the stream is starting: take the key.
+        m_Panel->claimHotkey();
+    }
+#endif
 }
 
 void SdlInputHandler::raiseAllKeys()

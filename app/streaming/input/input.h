@@ -2,6 +2,9 @@
 
 #include "settings/streamingpreferences.h"
 #include "backend/computermanager.h"
+#ifdef HAS_PANEL
+#include "streaming/panel/panelmenu.h"
+#endif
 
 #include "SDL_compat.h"
 
@@ -130,6 +133,13 @@ public:
 
     void handleTouchFingerEvent(SDL_TouchFingerEvent* event);
 
+    // Drains helper replies into the panel. Cheap when it is closed, and
+    // called from the event loop rather than on a timer.
+    void pollPanel();
+
+    // Only the panel wants these. Returns true when it took the event.
+    bool handleTextInput(const char* text);
+
     int getAttachedGamepadMask();
 
     void raiseAllKeys();
@@ -249,6 +259,12 @@ private:
     SDL_TimerID m_DragTimer;
     char m_DragButton;
     int m_NumFingersDown;
+
+#ifdef HAS_PANEL
+    // The in-client settings panel. Absent on platforms with no appliance to
+    // configure, which is every platform that is not Moonlight OS.
+    PanelMenu* m_Panel;
+#endif
 
     static const int k_ButtonMap[];
 };

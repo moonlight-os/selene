@@ -1,6 +1,7 @@
 import QtQuick 2.0
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.2
+import SeleneTheme 1.0
 
 NavigableDialog {
     id: dialog
@@ -49,6 +50,8 @@ NavigableDialog {
             text: dialogText + ((helpText && (standardButtons & Dialog.Help)) ? (helpTextSeparator + helpText) : "")
             wrapMode: Text.Wrap
             elide: Label.ElideRight
+            color: SeleneTheme.text
+            font.pointSize: 11
 
             // Cap the width so the dialog doesn't grow horizontally forever. This
             // will cause word wrap to kick in.
@@ -63,6 +66,7 @@ NavigableDialog {
 
         delegate: Button {
             flat: true
+            highlighted: activeFocus
 
             Keys.onReturnPressed: clicked()
             Keys.onEnterPressed: clicked()

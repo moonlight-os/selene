@@ -768,6 +768,14 @@ void VAAPIRenderer::notifyOverlayUpdated(Overlay::OverlayType type)
             overlayRect.x = 0;
             overlayRect.y = 0;
         }
+        else {
+            // The settings panel, inset from the corner so it reads as a
+            // panel rather than as text stuck to the edge. Anything else
+            // landing here gets the same treatment rather than the
+            // uninitialised rect this used to leave it with.
+            overlayRect.x = 48;
+            overlayRect.y = 48;
+        }
 
         overlayRect.w = newSurface->w;
         overlayRect.h = newSurface->h;
@@ -859,6 +867,18 @@ VAAPIRenderer::renderFrame(AVFrame* frame)
             }
             if (overlayRect.y < 0) {
                 overlayRect.y += windowHeight;
+            }
+
+            // The panel is centred -- in the frame, not the window.
+            //
+            // A subpicture is associated with the decoded surface, so its
+            // destination coordinates are in frame space and are then scaled
+            // and letterboxed along with the video. Centring on the window
+            // size puts it visibly off-centre whenever the stream resolution
+            // and the window disagree, which is most of the time.
+            if (type == Overlay::OverlayPanel) {
+                overlayRect.x = (frame->width - overlayRect.w) / 2;
+                overlayRect.y = (frame->height - overlayRect.h) / 2;
             }
 
             status = vaAssociateSubpicture(vaDeviceContext->display,

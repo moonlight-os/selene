@@ -1,14 +1,11 @@
-# Selene PC
+# Selene
 
-[Selene PC](https://moonlight-stream.org) is an open source PC client for NVIDIA GameStream and [Sunshine](https://github.com/LizardByte/Sunshine).
+Selene is the Moonlight OS streaming client for Windows, macOS, and Linux. It
+connects to Helios and other Moonlight-compatible hosts, while adding native
+Moonlight OS transport, appliance setup, multi-display, USB, microphone,
+camera, and read-only system-disk integration.
 
-Selene also has mobile versions for [Android](https://github.com/moonlight-stream/selene-android) and [iOS](https://github.com/moonlight-stream/selene-ios).
-
-You can follow development on our [Discord server](https://moonlight-stream.org/discord) and help translate Selene into your language on [Weblate](https://hosted.weblate.org/projects/selene/moonlight-qt/).
-
- [![Build](https://img.shields.io/github/actions/workflow/status/moonlight-stream/moonlight-qt/build.yml?branch=master)](https://github.com/moonlight-stream/moonlight-qt/actions/workflows/build.yml?query=branch%3Amaster)
- [![Downloads](https://img.shields.io/github/downloads/moonlight-stream/moonlight-qt/total)](https://github.com/moonlight-stream/moonlight-qt/releases)
- [![Translation Status](https://hosted.weblate.org/widgets/selene/-/moonlight-qt/svg-badge.svg)](https://hosted.weblate.org/projects/selene/moonlight-qt/)
+[Source, issues, and releases](https://github.com/moonlight-os/selene)
 
 ## Features
  - Hardware accelerated video decoding on Windows, Mac, and Linux
@@ -20,19 +17,21 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Gamepad support with force feedback and motion controls for up to 16 players
  - Support for both pointer capture (for games) and direct mouse control (for remote desktop)
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
+ - An accessible, keyboard/gamepad/pointer control centre on Moonlight OS
+ - Authenticated QUIC transport with compatibility fallback
  
 ## Downloads
-- [Windows, macOS, and Steam Link](https://github.com/moonlight-stream/moonlight-qt/releases)
+- [Moonlight OS Selene releases](https://github.com/moonlight-os/selene/releases)
 - [Snap (for Ubuntu-based Linux distros)](https://snapcraft.io/selene)
 - [Flatpak (for other Linux distros)](https://flathub.org/apps/details/dev.mopigames.Selene)
-- [AppImage](https://github.com/moonlight-stream/moonlight-qt/releases)
+- [AppImage](https://github.com/moonlight-os/selene/releases)
 - [Raspberry Pi 4 and 5](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-Raspberry-Pi-4)
 - [Generic ARM 32-bit and 64-bit Debian packages](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-ARM%E2%80%90based-Single-Board-Computers) (not for Raspberry Pi)
 - [Experimental RISC-V Debian packages](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-RISC%E2%80%90V-Single-Board-Computers)
 - [NVIDIA Jetson and Nintendo Switch (Ubuntu L4T)](https://github.com/moonlight-stream/moonlight-docs/wiki/Installing-Selene-Qt-on-Linux4Tegra-(L4T)-Ubuntu)
 
-### Nightly Builds
-- [Downloads](https://nightly.link/moonlight-stream/moonlight-qt/workflows/build/master)
+### Development builds
+- [GitHub Actions](https://github.com/moonlight-os/selene/actions)
 
 #### Special Thanks
 
@@ -71,17 +70,6 @@ Hosting for Selene's Debian and L4T package repositories is graciously provided 
     * Qt 5: `qt5-qtsvg-devel qt5-qtquickcontrols2-devel`
 * Building the Vulkan renderer requires a `libplacebo-dev`/`libplacebo-devel` version of at least v7.349.0 and FFmpeg 6.1 or later.
 
-### Steam Link Build Requirements
-* [Steam Link SDK](https://github.com/ValveSoftware/steamlink-sdk) cloned on your build system
-* STEAMLINK_SDK_PATH environment variable set to the Steam Link SDK path
-
-**Steam Link Hardware Limitations**  
-Selene builds for Steam Link are subject to hardware limitations of the Steam Link device:
-* Maximum resolution: **1080p (1920x1080)**
-* Maximum framerate: **60 FPS**
-* Maximum video bitrate: **40 Mbps**
-* **HDR streaming is not supported** on the original hardware
-
 ### Docker containers
 If you want to use Docker for building, look at [this repo](https://github.com/cgutman/selene-packaging) containing canonical containers
 for different architectures, which handle building deps and extra linking for you.
@@ -90,7 +78,6 @@ for different architectures, which handle building deps and extra linking for yo
 1. Install the latest Qt SDK (and optionally, the Qt Creator IDE) from https://www.qt.io/download
     * You can install Qt via Homebrew on macOS, but you will need to use `brew install qt --with-debug` to be able to create debug builds of Selene.
     * You may also use your Linux distro's package manager for the Qt SDK as long as the packages are Qt 5.12 or later.
-    * This step is not required for building on Steam Link, because the Steam Link SDK includes Qt 5.14.
 2. Download submodules and dependencies
     * Run `git submodule update --init --recursive` from within `moonlight-qt/`.
     * On Windows and macOS, you must also run `setup-deps.ps1` (Windows) or `setup-deps.py` (macOS).
@@ -99,7 +86,6 @@ for different architectures, which handle building deps and extra linking for yo
     * To build a binary for use on non-development machines, use the scripts in the `scripts` folder.
         * For Windows builds, use `scripts\build-arch.bat` and `scripts\generate-bundle.bat`. Execute these scripts from the root of the repository within a Qt command prompt. Ensure  7-Zip binary directory is on your `%PATH%`.
         * For macOS builds, use `scripts/generate-dmg.sh`. Execute this script from the root of the repository and ensure Qt's `bin` folder is in your `$PATH`.
-        * For Steam Link builds, run `scripts/build-steamlink-app.sh` from the root of the repository.
     * To build from the command line for development use on macOS or Linux, run `qmake6 selene.pro` then `make debug` or `make release`.
         * The final binary will be placed in `app/selene`.
     * To create an embedded build for a single-purpose device, use `qmake6 "CONFIG+=embedded" selene.pro` and build normally.

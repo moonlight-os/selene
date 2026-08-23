@@ -1,15 +1,26 @@
 #pragma once
 
+#include <memory>
+
+#include <QByteArray>
 #include <QSemaphore>
 #include <QQuickWindow>
 
 #include <Limelight.h>
 #include <opus_multistream.h>
+
+class MicrophoneCapturer;
+class CameraCapturer;
+class QProcess;
 #include "settings/streamingpreferences.h"
 #include "input/input.h"
 #include "video/decoder.h"
 #include "audio/renderers/renderer.h"
 #include "video/overlaymanager.h"
+
+class HelperClient;
+class UsbTunnelClient;
+class QuicTransport;
 
 class SupportedVideoFormatList : public QList<int>
 {
@@ -98,7 +109,8 @@ class Session : public QObject
     friend class AsyncConnectionStartThread;
 
 public:
-    explicit Session(NvComputer* computer, NvApp& app, StreamingPreferences *preferences = nullptr);
+    explicit Session(NvComputer* computer, NvApp& app, StreamingPreferences *preferences = nullptr,
+                     int displayIndex = 0);
     virtual ~Session();
 
     Q_INVOKABLE bool initialize(QQuickWindow* qtWindow);
@@ -229,6 +241,24 @@ private:
     static
     void clClipboardData(uint32_t seq, uint16_t format, const void* data, uint32_t length);
 
+    static
+    void clUsbTunnelOpen(uint32_t tunnelId);
+
+    static
+    void clUsbTunnelData(uint32_t tunnelId, const void* data, uint16_t length);
+
+    static
+    void clUsbTunnelClose(uint32_t tunnelId, uint16_t reason);
+
+    static
+    void clDiskTunnelOpen(uint32_t tunnelId);
+
+    static
+    void clDiskTunnelData(uint32_t tunnelId, const void* data, uint16_t length);
+
+    static
+    void clDiskTunnelClose(uint32_t tunnelId, uint16_t reason);
+
     // SDL2 has no clipboard-change event, so a local copy can only be noticed
     // by looking. Rate limited internally; safe to call from the event loop as
     // often as it turns.
@@ -236,6 +266,20 @@ private:
 
     // Sent once per session, if the host advertised the feature.
     void sendKeyboardLayout();
+
+    // Mirror the appliance helper's complete exported USB set onto the
+    // authenticated session. Quietly does nothing on a normal desktop.
+    void pollUsbDevices();
+
+    // Acquire and heartbeat the appliance's read-only system-disk lease, then
+    // advertise the resulting loopback-only iSCSI target to the host.
+    void pollSystemDisk();
+
+    // Send the complete monitor set at connection start and after SDL hotplug.
+    void sendDisplayTopology();
+
+    void startAuxiliaryDisplaySessions();
+    void stopAuxiliaryDisplaySessions();
 
     static
     void clSetAdaptiveTriggers(uint16_t controllerNumber, uint8_t eventFlags, uint8_t typeLeft, uint8_t typeRight, uint8_t *left, uint8_t *right);
@@ -281,6 +325,8 @@ private:
     int m_FlushingWindowEventsRef;
     QStringList m_LaunchWarnings;
     bool m_ShouldExit;
+    int m_DisplayIndex;
+    QList<QProcess*> m_AuxiliaryDisplayProcesses;
 
     bool m_AsyncConnectionSuccess;
     int m_PortTestResults;
@@ -292,6 +338,9 @@ private:
 
     OpusMSDecoder* m_OpusDecoder;
     IAudioRenderer* m_AudioRenderer;
+    std::unique_ptr<MicrophoneCapturer> m_MicrophoneCapturer;
+    std::unique_ptr<CameraCapturer> m_CameraCapturer;
+    std::unique_ptr<QuicTransport> m_QuicTransport;
     OPUS_MULTISTREAM_CONFIGURATION m_ActiveAudioConfig;
     OPUS_MULTISTREAM_CONFIGURATION m_OriginalAudioConfig;
     int m_AudioSampleCount;
@@ -304,7 +353,26 @@ private:
     // new local copy from the text we just accepted from the host.
     QString m_LastClipboardText;
     uint32_t m_LastClipboardPollTicks = 0;
+    uint32_t m_DisplayTopologyGeneration = 0;
     uint32_t m_ClipboardSeq = 0;
+
+#ifdef HAS_PANEL
+    std::unique_ptr<HelperClient> m_UsbHelper;
+    std::unique_ptr<HelperClient> m_DiskHelper;
+    std::unique_ptr<UsbTunnelClient> m_UsbTunnel;
+    std::unique_ptr<UsbTunnelClient> m_DiskTunnel;
+    int m_UsbRequest = 0;
+    uint32_t m_UsbGeneration = 0;
+    uint32_t m_LastUsbPollTicks = 0;
+    uint32_t m_LastUsbSentTicks = 0;
+    QByteArray m_LastUsbOffer;
+    QString m_LastUsbError;
+    int m_DiskRequest = 0;
+    uint32_t m_DiskGeneration = 0;
+    uint32_t m_LastDiskPollTicks = 0;
+    QByteArray m_LastDiskOffer;
+    QString m_LastDiskError;
+#endif
 
     static Session* s_ActiveSession;
     static QSemaphore s_ActiveSessionSemaphore;

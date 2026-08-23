@@ -165,8 +165,7 @@ IdentityManager::getSslKey()
 {
     if (m_CachedSslKey.isNull()) {
         // This seemingly useless const_cast is required for old OpenSSL headers
-        // where BIO_new_mem_buf's parameter is not declared const like those on
-        // the Steam Link hardware.
+        // where BIO_new_mem_buf's parameter is not declared const.
         BIO* bio = BIO_new_mem_buf(const_cast<char*>(m_CachedPrivateKey.constData()), -1);
         THROW_BAD_ALLOC_IF_NULL(bio);
 
