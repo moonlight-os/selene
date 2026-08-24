@@ -75,6 +75,12 @@ class PanelContractTest(unittest.TestCase):
         self.assertIn('action == "Continue with Ethernet"', model)
         self.assertIn('result.value("connection_type")', model)
 
+    def test_prerelease_version_keeps_windows_resource_numeric(self):
+        project = self.source("app/app.pro")
+        self.assertIn('APP_VERSION = "$$cat(version.txt)"', project)
+        self.assertIn('VERSION = $$section(APP_VERSION, -, 0, 0)', project)
+        self.assertIn('DEFINES += VERSION_STR=\\\\\\"$$APP_VERSION\\\\\\"', project)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

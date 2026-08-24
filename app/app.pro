@@ -574,8 +574,14 @@ macx {
     }
 }
 
-VERSION = "$$cat(version.txt)"
-DEFINES += VERSION_STR=\\\"$$cat(version.txt)\\\"
+APP_VERSION = "$$cat(version.txt)"
+VERSION = $$APP_VERSION
+# Windows VERSIONINFO accepts only numeric components. Keep the full semantic
+# prerelease in VERSION_STR for the UI, but give qmake a numeric file version.
+win32 {
+    VERSION = $$section(APP_VERSION, -, 0, 0)
+}
+DEFINES += VERSION_STR=\\\"$$APP_VERSION\\\"
 
 # Semantic colours are shared by the QML application and the native
 # in-stream panel. Keeping this outside HAS_PANEL also makes the contract

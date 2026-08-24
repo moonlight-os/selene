@@ -1,4 +1,4 @@
-selene (6.3.0~beta1-1) trixie; urgency=medium
+selene (6.3.0~beta2-1) trixie; urgency=medium
 
   * Add M6 display-topology negotiation for Helios hosts.
   * Add M7 authenticated QUIC transport and compatibility fallback fixes.
