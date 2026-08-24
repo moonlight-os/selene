@@ -128,6 +128,7 @@ private:
         ConfirmForgetNetwork,
         RemoteAccess,
         Maintenance,
+        SystemDisk,
         Installer,
         ConfirmInstall,
         Diagnostics,
@@ -159,6 +160,7 @@ private:
         bool captureSystemKeys = true;
         bool naturalScroll = false;
         bool forceSoftware = false;
+        QString updateChannel = QStringLiteral("stable");
     };
 
     struct AudioSink {
@@ -315,6 +317,11 @@ private:
     bool m_PersistenceAvailable = false;
     bool m_UpdateAvailable = false;
     bool m_TerminalAvailable = false;
+    bool m_DiskActive = false;
+    QString m_DiskState = QStringLiteral("idle");
+    double m_DiskSize = 0;
+    double m_DiskCowUsed = 0;
+    double m_DiskCowCapacity = 0;
     bool m_SetupLive = false;
     bool m_SetupConfigured = false;
     bool m_WelcomeDone = false;

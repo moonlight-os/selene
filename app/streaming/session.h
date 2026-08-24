@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include <QByteArray>
@@ -259,6 +260,10 @@ private:
     static
     void clDiskTunnelClose(uint32_t tunnelId, uint16_t reason);
 
+    static
+    void clSystemDiskStatus(uint32_t generation, uint8_t state,
+                            const char* message, uint16_t messageLength);
+
     // SDL2 has no clipboard-change event, so a local copy can only be noticed
     // by looking. Rate limited internally; safe to call from the event loop as
     // often as it turns.
@@ -368,10 +373,11 @@ private:
     QByteArray m_LastUsbOffer;
     QString m_LastUsbError;
     int m_DiskRequest = 0;
-    uint32_t m_DiskGeneration = 0;
+    std::atomic_uint32_t m_DiskGeneration {0};
     uint32_t m_LastDiskPollTicks = 0;
     QByteArray m_LastDiskOffer;
     QString m_LastDiskError;
+    std::atomic_uint8_t m_DiskHostState {ML_SYSTEM_DISK_STATUS_DETACHED};
 #endif
 
     static Session* s_ActiveSession;

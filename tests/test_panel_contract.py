@@ -38,6 +38,14 @@ class PanelContractTest(unittest.TestCase):
         self.assertIn('QStringLiteral("update")', model)
         self.assertIn("m_UpdateAvailable", header)
 
+    def test_native_control_centre_toggles_beta_updates(self):
+        model = self.source("app/streaming/panel/panelmodel.cpp")
+        header = self.source("app/streaming/panel/panelmodel.h")
+        self.assertIn('QStringLiteral("Beta updates\\t%1")', model)
+        self.assertIn('QStringLiteral("update_channel")', model)
+        self.assertIn('result.value("update_channel")', model)
+        self.assertIn("QString updateChannel", header)
+
     def test_welcome_keyboard_configuration_returns_to_welcome(self):
         model = self.source("app/streaming/panel/panelmodel.cpp")
         header = self.source("app/streaming/panel/panelmodel.h")

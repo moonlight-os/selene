@@ -229,6 +229,7 @@ QString PanelModel::screenTitle() const
     case Screen::ConfirmForgetNetwork: return QStringLiteral("Forget this network?");
     case Screen::RemoteAccess: return QStringLiteral("Remote access");
     case Screen::Maintenance: return QStringLiteral("System & maintenance");
+    case Screen::SystemDisk: return QStringLiteral("Shared system disk");
     case Screen::Installer: return QStringLiteral("Install Moonlight OS");
     case Screen::ConfirmInstall: return QStringLiteral("Install Moonlight OS?");
     case Screen::Diagnostics: return QStringLiteral("Health & diagnostics");
@@ -302,6 +303,7 @@ QString PanelModel::screenSection() const
         ? QStringLiteral("Moonlight OS setup")
         : QStringLiteral("Devices & input");
     case Screen::Maintenance:
+    case Screen::SystemDisk:
     case Screen::Installer:
     case Screen::ConfirmInstall:
     case Screen::Diagnostics:
@@ -367,6 +369,7 @@ PanelModel::Screen PanelModel::parentScreen() const
     case Screen::ConfirmTailscaleLogout: return Screen::Tailscale;
     case Screen::Password: return Screen::Networks;
     case Screen::Maintenance: return Screen::Main;
+    case Screen::SystemDisk: return Screen::Maintenance;
     case Screen::Installer: return m_Mode == Mode::FirstRun ? Screen::Welcome
                                                             : Screen::Maintenance;
     case Screen::ConfirmInstall: return Screen::Installer;
@@ -661,8 +664,15 @@ QStringList PanelModel::currentItems() const
                  "Password setup (guarded terminal)", "Check again", "Back" };
     case Screen::Maintenance:
     {
-        QStringList items { "Health & diagnostics", "Video recovery", "Settings backup" };
-        if (m_UpdateAvailable) items.append(QStringLiteral("Update Moonlight OS"));
+        QStringList items { "Health & diagnostics", "Video recovery", "Settings backup",
+                            QStringLiteral("Shared system disk\t%1").arg(
+                                m_DiskActive ? m_DiskState : QStringLiteral("not shared")) };
+        if (m_UpdateAvailable) {
+            items.append(QStringLiteral("Update Moonlight OS"));
+            items.append(QStringLiteral("Beta updates\t%1").arg(
+                m_Settings.updateChannel == QLatin1String("beta")
+                    ? QStringLiteral("On") : QStringLiteral("Off")));
+        }
         if (m_InstallAvailable) items.append(QStringLiteral("Install to this computer"));
         if (m_PersistenceAvailable && !m_Persistence) {
             items.append(QStringLiteral("Save settings to this USB stick"));
@@ -672,6 +682,8 @@ QStringList PanelModel::currentItems() const
         items.append(QStringLiteral("Back"));
         return items;
     }
+    case Screen::SystemDisk:
+        return { "Check again", "Back" };
     case Screen::Installer: {
         QStringList items;
         for (const auto& target : m_InstallTargets) {
@@ -717,7 +729,11 @@ QStringList PanelModel::currentItems() const
     case Screen::ConfirmRestore:
         return { "No, keep current settings", "Yes, restore this backup" };
     case Screen::Power:
-        return { "Reboot", "Shut down", "Back" };
+        return { m_DiskActive ? QStringLiteral("Reboot\tunavailable while disk is shared")
+                              : QStringLiteral("Reboot"),
+                 m_DiskActive ? QStringLiteral("Shut down\tunavailable while disk is shared")
+                              : QStringLiteral("Shut down"),
+                 "Back" };
     case Screen::ConfirmPower:
         // "No" first, and selected by default, because the two outcomes here
         // are not equally recoverable.
@@ -1036,11 +1052,32 @@ PanelPainter::Model PanelModel::model() const
         };
     }
 
+    if (m_Screen == Screen::SystemDisk) {
+        if (!m_DiskActive) {
+            out.lines = QStringList{
+                QStringLiteral("The Moonlight OS disk is not shared with a host."),
+                QStringLiteral("A stable read-only snapshot is created automatically during a Helios stream."),
+            };
+        }
+        else {
+            double usedPercent = m_DiskCowCapacity > 0
+                ? (100.0 * m_DiskCowUsed / m_DiskCowCapacity) : 0;
+            out.lines = QStringList{
+                QStringLiteral("Snapshot  %1 · read-only").arg(m_DiskState),
+                QStringLiteral("Capacity  %1").arg(diskSizeLabel(m_DiskSize)),
+                QStringLiteral("Changes   %1 of %2 · %3%")
+                    .arg(diskSizeLabel(m_DiskCowUsed), diskSizeLabel(m_DiskCowCapacity))
+                    .arg(usedPercent, 0, 'f', 1),
+                QStringLiteral("Disconnect the stream before restoring settings, rebooting, or shutting down."),
+            };
+        }
+    }
+
     if (m_Screen == Screen::Installer) {
         if (m_InstallTargets.isEmpty()) {
         out.lines = QStringList{
                 QStringLiteral("No eligible internal disk was found."),
-                QStringLiteral("The live USB and disks smaller than 6 GB are never offered."),
+                QStringLiteral("The live USB and disks smaller than 24 GB are never offered."),
             };
         }
         else {
@@ -1557,6 +1594,12 @@ void PanelModel::activateSelection()
                            QStringLiteral("The archive is damaged or uses an unsupported format."));
                 return;
             }
+            if (m_DiskActive) {
+                showNotice(PanelPainter::Tone::Warning,
+                           QStringLiteral("Disconnect before restoring"),
+                           QStringLiteral("The host must detach the shared system-disk snapshot first."));
+                return;
+            }
             m_PendingArchive = archive.path;
             m_PendingArchiveName = archive.name;
             m_PendingArchiveSummary = archive.summary;
@@ -1841,6 +1884,27 @@ void PanelModel::activateSelection()
     if (action == "System & maintenance") {
         goTo(Screen::Maintenance);
         ask(QStringLiteral("system.context"), {}, QStringLiteral("Checking system options"));
+        ask(QStringLiteral("disk.status"), {}, {}, {}, true);
+        return;
+    }
+
+    if (m_Screen == Screen::Maintenance && action == "Shared system disk") {
+        goTo(Screen::SystemDisk);
+        ask(QStringLiteral("disk.status"), {}, QStringLiteral("Checking system disk sharing"));
+        return;
+    }
+
+    if (m_Screen == Screen::SystemDisk && action == "Check again") {
+        ask(QStringLiteral("disk.status"), {}, QStringLiteral("Checking system disk sharing"));
+        return;
+    }
+
+    if (m_Screen == Screen::Maintenance && action == "Beta updates") {
+        const bool enable = m_Settings.updateChannel != QLatin1String("beta");
+        updateSetting(QStringLiteral("update_channel"),
+                      enable ? QStringLiteral("beta") : QStringLiteral("stable"),
+                      enable ? QStringLiteral("Enabling Beta updates")
+                             : QStringLiteral("Returning to Stable updates"));
         return;
     }
 
@@ -2307,13 +2371,20 @@ void PanelModel::activateSelection()
         return;
     }
 
-    if (choice == "Power") {
+    if (action == "Power") {
         goTo(Screen::Power);
+        ask(QStringLiteral("disk.status"), {}, {}, {}, true);
         return;
     }
 
-    if (choice == "Reboot" || choice == "Shut down") {
-        m_PendingPower = choice == "Reboot" ? QStringLiteral("reboot") : QStringLiteral("poweroff");
+    if (action == "Reboot" || action == "Shut down") {
+        if (m_DiskActive) {
+            showNotice(PanelPainter::Tone::Warning,
+                       QStringLiteral("Disconnect before powering off"),
+                       QStringLiteral("The host must detach the shared system-disk snapshot first."));
+            return;
+        }
+        m_PendingPower = action == "Reboot" ? QStringLiteral("reboot") : QStringLiteral("poweroff");
         goTo(Screen::ConfirmPower);  // selection starts on "No"
         showNotice(PanelPainter::Tone::Warning, QStringLiteral("The stream will end"),
                    QStringLiteral("Unsaved work on this Moonlight box will be lost."));
@@ -2413,6 +2484,10 @@ void PanelModel::applySettings(const QJsonObject& result)
     m_Settings.captureSystemKeys = result.value("capture_system_keys").toBool(true);
     m_Settings.naturalScroll = result.value("natural_scroll").toBool();
     m_Settings.forceSoftware = result.value("force_software").toBool();
+    m_Settings.updateChannel = result.value("update_channel").toString(QStringLiteral("stable"));
+    if (m_Settings.updateChannel != QLatin1String("beta")) {
+        m_Settings.updateChannel = QStringLiteral("stable");
+    }
 }
 
 void PanelModel::applyAudio(const QJsonObject& result)
@@ -2712,6 +2787,21 @@ void PanelModel::applyReply(const Request& request, const QJsonObject& reply)
         m_PersistenceAvailable = result.value("persistence_available").toBool();
         m_UpdateAvailable = result.value("update_available").toBool();
         m_TerminalAvailable = result.value("terminal_available").toBool();
+        return;
+    }
+
+    if (op == QLatin1String("disk.status")) {
+        m_DiskActive = result.value("active").toBool();
+        m_DiskState = result.value("state").toString(
+            m_DiskActive ? QStringLiteral("unknown") : QStringLiteral("idle"));
+        m_DiskSize = result.value("size").toDouble();
+        m_DiskCowUsed = result.value("cow_used").toDouble();
+        m_DiskCowCapacity = result.value("cow_capacity").toDouble();
+        if (visible && m_DiskState == QLatin1String("overflow")) {
+            showNotice(PanelPainter::Tone::Error,
+                       QStringLiteral("System-disk snapshot is full"),
+                       QStringLiteral("The host attachment is being withdrawn. Disconnect and reconnect."));
+        }
         return;
     }
 

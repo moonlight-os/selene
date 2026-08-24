@@ -80,7 +80,8 @@ CONNECTION_LISTENER_CALLBACKS Session::k_ConnCallbacks = {
     Session::clUsbTunnelClose,
     Session::clDiskTunnelOpen,
     Session::clDiskTunnelData,
-    Session::clDiskTunnelClose
+    Session::clDiskTunnelClose,
+    Session::clSystemDiskStatus
 };
 
 Session* Session::s_ActiveSession;
@@ -444,6 +445,63 @@ void Session::clDiskTunnelClose(uint32_t tunnelId, uint16_t reason)
 #else
     Q_UNUSED(tunnelId);
     Q_UNUSED(reason);
+#endif
+}
+
+void Session::clSystemDiskStatus(uint32_t generation, uint8_t state,
+                                 const char* message, uint16_t messageLength)
+{
+#ifdef HAS_PANEL
+    auto session = s_ActiveSession;
+    if (session == nullptr || session->m_DisplayIndex != 0 ||
+            generation != session->m_DiskGeneration.load() ||
+            state > ML_SYSTEM_DISK_STATUS_DETACHING) {
+        return;
+    }
+
+    session->m_DiskHostState.store(state);
+    QString detail = QString::fromUtf8(message, messageLength).trimmed();
+    QString text;
+    switch (state) {
+    case ML_SYSTEM_DISK_STATUS_ATTACHING:
+        text = QStringLiteral("Connecting the read-only system disk to the host...");
+        break;
+    case ML_SYSTEM_DISK_STATUS_ATTACHED:
+        text = QStringLiteral("System disk attached to the host · read-only");
+        break;
+    case ML_SYSTEM_DISK_STATUS_DETACHING:
+        text = QStringLiteral("Detaching the shared system disk from the host...");
+        break;
+    case ML_SYSTEM_DISK_STATUS_DETACHED:
+        text = QStringLiteral("System disk detached from the host");
+        break;
+    case ML_SYSTEM_DISK_STATUS_FAILED:
+        text = QStringLiteral("The host could not attach the system disk");
+        if (!detail.isEmpty()) text += QStringLiteral("\n") + detail;
+        break;
+    }
+    session->m_OverlayManager.updateOverlayText(Overlay::OverlayStatusUpdate,
+                                                text.toUtf8().constData());
+    session->m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, true);
+
+    if (state == ML_SYSTEM_DISK_STATUS_ATTACHED ||
+            state == ML_SYSTEM_DISK_STATUS_DETACHED) {
+        const auto expected = state;
+        SDL_AddTimer(5000, [](Uint32, void* value) -> Uint32 {
+            auto expectedState = static_cast<uint8_t>(reinterpret_cast<uintptr_t>(value));
+            if (s_ActiveSession != nullptr &&
+                    s_ActiveSession->m_DiskHostState.load() == expectedState) {
+                s_ActiveSession->m_OverlayManager.setOverlayState(
+                    Overlay::OverlayStatusUpdate, false);
+            }
+            return 0;
+        }, reinterpret_cast<void*>(static_cast<uintptr_t>(expected)));
+    }
+#else
+    Q_UNUSED(generation);
+    Q_UNUSED(state);
+    Q_UNUSED(message);
+    Q_UNUSED(messageLength);
 #endif
 }
 
@@ -2043,7 +2101,8 @@ bool Session::startConnectionAsync()
             !LiGetPeerFeatureVersion(ML_FEATURE_SYSTEM_DISK)) {
         m_OverlayManager.updateOverlayText(
             Overlay::OverlayStatusUpdate,
-            "Connected in compatibility mode\nMoonlight OS extras are unavailable");
+            "Connected in standard Moonlight mode\n"
+            "Unavailable: clipboard, USB, mic/camera, extra displays, system disk");
         m_OverlayManager.setOverlayState(Overlay::OverlayStatusUpdate, true);
         SDL_AddTimer(5000, [](Uint32, void*) -> Uint32 {
             SDL_Event event = {};
@@ -2146,6 +2205,13 @@ void Session::sendDisplayTopology()
                 display.flags |= ML_DISPLAY_FLAG_PRIMARY;
                 primaryIndex = displays.size();
             }
+        }
+        // The renderer capability check performed before launch includes the
+        // compositor/output path (or a supported tone-mapping path). If HDR was
+        // accepted there and requested by the user, this display can safely
+        // consume an HDR virtual output from Helios.
+        if (m_Preferences->enableHdr) {
+            display.flags |= ML_DISPLAY_FLAG_HDR;
         }
         displays.append(display);
     }
@@ -2339,7 +2405,8 @@ void Session::pollSystemDisk()
         // The helper connection owns the appliance-side target. If it dies,
         // withdraw immediately rather than leaving the host with a dead disk.
         if (m_DiskGeneration != 0 && !m_LastDiskOffer.isEmpty()) {
-            if (LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0) == 0) {
+            if (LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0,
+                                      nullptr, nullptr) == 0) {
                 m_LastDiskOffer.clear();
             }
         }
@@ -2354,6 +2421,11 @@ void Session::pollSystemDisk()
 
         if (!reply.value("ok").toBool()) {
             auto message = reply.value("error").toObject().value("message").toString();
+            if (m_DiskGeneration != 0 && !m_LastDiskOffer.isEmpty() &&
+                    LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0,
+                                          nullptr, nullptr) == 0) {
+                m_LastDiskOffer.clear();
+            }
             if (message != m_LastDiskError) {
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                             "Could not acquire the read-only system disk lease: %s",
@@ -2365,19 +2437,30 @@ void Session::pollSystemDisk()
 
         auto result = reply.value("result").toObject();
         QByteArray iqn = result.value("iqn").toString().toUtf8();
+        QByteArray username = result.value("username").toString().toUtf8();
+        QByteArray password = result.value("password").toString().toUtf8();
         uint64_t size = (uint64_t)result.value("size").toDouble();
         uint32_t sectorSize = (uint32_t)result.value("sector_size").toInt();
+        if (!result.value("readonly").toBool() || !result.value("snapshot").toBool() ||
+                result.value("snapshot_state").toString() != QLatin1String("ready") ||
+                iqn.isEmpty() || username.size() < 12 || password.size() < 12) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "The system disk helper did not return a safe authenticated snapshot");
+            continue;
+        }
         QByteArray fingerprint = iqn + '\0' +
+                                 username + '\0' +
                                  QByteArray::number(static_cast<qulonglong>(size)) + '\0' +
                                  QByteArray::number(static_cast<qulonglong>(sectorSize));
         if (fingerprint == m_LastDiskOffer) continue;
 
-        if (LiSendSystemDiskOffer(++m_DiskGeneration, iqn.constData(), size, sectorSize) == 0) {
+        if (LiSendSystemDiskOffer(++m_DiskGeneration, iqn.constData(), size, sectorSize,
+                                  username.constData(), password.constData()) == 0) {
             m_LastDiskOffer = fingerprint;
             m_LastDiskError.clear();
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                         "Offered the %llu-byte read-only Moonlight OS disk to the host, generation %u",
-                        (unsigned long long)size, m_DiskGeneration);
+                        (unsigned long long)size, m_DiskGeneration.load());
         }
     }
 
@@ -3085,7 +3168,7 @@ DispatchDeferredCleanup:
         LiSendUsbDeviceSync(++m_UsbGeneration, nullptr, 0);
     }
     if (LiGetPeerFeatureVersion(ML_FEATURE_SYSTEM_DISK) && m_DiskGeneration != 0) {
-        LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0);
+        LiSendSystemDiskOffer(++m_DiskGeneration, nullptr, 0, 0, nullptr, nullptr);
         m_LastDiskOffer.clear();
     }
 #endif

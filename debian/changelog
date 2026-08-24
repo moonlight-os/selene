@@ -1,3 +1,13 @@
+selene (6.3.0~beta1-1) trixie; urgency=medium
+
+  * Add M6 display-topology negotiation for Helios hosts.
+  * Add M7 authenticated QUIC transport and compatibility fallback fixes.
+  * Complete M8 feature-off and reconnect interoperability.
+  * Add M9 read-only system-disk snapshot lifecycle reporting.
+  * Add the native Moonlight OS Stable/Beta update-channel toggle.
+
+ -- Margot Prego <mopigames@proton.me>  Mon, 24 Aug 2026 17:01:08 +0200
+
 selene (6.2.1-1) trixie; urgency=medium
 
   * Restore the Tailscale approval QR code in the native SDL panel.

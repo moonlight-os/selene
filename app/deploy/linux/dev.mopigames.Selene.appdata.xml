@@ -50,6 +50,16 @@
 	</screenshots>
 
 	<releases>
+		<release version="6.3.0-beta.1" date="2026-08-24" type="development">
+			<description>
+				<p>Beta features:</p>
+				<ul>
+					<li>Added negotiated display topology and authenticated QUIC transport for Helios</li>
+					<li>Added read-only system-disk snapshot lifecycle reporting</li>
+					<li>Added the native Stable/Beta Moonlight OS update-channel toggle</li>
+				</ul>
+			</description>
+		</release>
 		<release version="6.2.1" date="2026-08-23">
 			<description>
 				<p>Bugfixes:</p>
