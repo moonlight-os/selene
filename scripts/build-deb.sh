@@ -42,6 +42,7 @@ mkdir -p "$HERE/dist"
 # dependency list has one source of truth rather than two.
 say "Building the package"
 docker run --rm --network host \
+	-e TELEMETRY_URL="${TELEMETRY_URL:-}" \
 	-e MSQUIC_SHA256="$MSQUIC_SHA256" \
 	-e MSQUIC_URL="$MSQUIC_URL" \
 	-e MSQUIC_HEADER_BASE="$MSQUIC_HEADER_BASE" \

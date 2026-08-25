@@ -136,6 +136,8 @@ public:
     Q_PROPERTY(bool framePacing MEMBER framePacing NOTIFY framePacingChanged)
     Q_PROPERTY(bool connectionWarnings MEMBER connectionWarnings NOTIFY connectionWarningsChanged)
     Q_PROPERTY(bool configurationWarnings MEMBER configurationWarnings NOTIFY configurationWarningsChanged)
+    Q_PROPERTY(bool telemetryEnabled MEMBER telemetryEnabled NOTIFY telemetryEnabledChanged)
+    Q_PROPERTY(bool crashReportingEnabled MEMBER crashReportingEnabled NOTIFY crashReportingEnabledChanged)
     Q_PROPERTY(bool richPresence MEMBER richPresence NOTIFY richPresenceChanged)
     Q_PROPERTY(bool gamepadMouse MEMBER gamepadMouse NOTIFY gamepadMouseChanged)
     Q_PROPERTY(bool detectNetworkBlocking MEMBER detectNetworkBlocking NOTIFY detectNetworkBlockingChanged)
@@ -178,6 +180,8 @@ public:
     bool framePacing;
     bool connectionWarnings;
     bool configurationWarnings;
+    bool telemetryEnabled;
+    bool crashReportingEnabled;
     bool richPresence;
     bool gamepadMouse;
     bool detectNetworkBlocking;
@@ -225,6 +229,8 @@ signals:
     void framePacingChanged();
     void connectionWarningsChanged();
     void configurationWarningsChanged();
+    void telemetryEnabledChanged();
+    void crashReportingEnabledChanged();
     void richPresenceChanged();
     void gamepadMouseChanged();
     void detectNetworkBlockingChanged();
@@ -246,4 +252,3 @@ private:
 
     QQmlEngine* m_QmlEngine;
 };
-

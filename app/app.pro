@@ -1,6 +1,8 @@
 QT += core quick network quickcontrols2 svg
 CONFIG += c++17
 
+DEFINES += TELEMETRY_URL=\\\"$$TELEMETRY_URL\\\"
+
 unix:!macx {
     TARGET = selene
 } else {
@@ -176,6 +178,7 @@ SOURCES += \
     backend/nvapp.cpp \
     cli/pair.cpp \
     main.cpp \
+    telemetry.cpp \
     backend/computerseeker.cpp \
     backend/identitymanager.cpp \
     backend/nvcomputer.cpp \
@@ -219,6 +222,7 @@ SOURCES += \
 
 HEADERS += \
     SDL_compat.h \
+    telemetry.h \
     backend/nvaddress.h \
     backend/nvapp.h \
     cli/pair.h \

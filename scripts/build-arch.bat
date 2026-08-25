@@ -163,7 +163,7 @@ set LDFLAGS=/LTCG
 
 echo Configuring the project
 pushd %BUILD_FOLDER%
-%QMAKE_CMD% %SOURCE_ROOT%\selene.pro MSQUIC_LIBRARY=%SOURCE_ROOT%\libs\windows\lib\%ARCH%\msquic.lib
+%QMAKE_CMD% %SOURCE_ROOT%\selene.pro MSQUIC_LIBRARY=%SOURCE_ROOT%\libs\windows\lib\%ARCH%\msquic.lib TELEMETRY_URL="%TELEMETRY_URL%"
 if !ERRORLEVEL! NEQ 0 goto Error
 popd
 

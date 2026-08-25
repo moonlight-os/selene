@@ -3,6 +3,9 @@ name: Build - Linux AppImage
 permissions:
   contents: read
 
+env:
+  TELEMETRY_URL: ${{ vars.TELEMETRY_URL }}
+
 on:
   workflow_call:
     inputs:

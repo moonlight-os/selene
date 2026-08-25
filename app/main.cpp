@@ -57,6 +57,7 @@
 #include "backend/systemproperties.h"
 #include "streaming/session.h"
 #include "settings/streamingpreferences.h"
+#include "telemetry.h"
 #include "gui/sdlgamepadkeynavigation.h"
 
 #if defined(Q_OS_WIN32)
@@ -1060,6 +1061,7 @@ int main(int argc, char *argv[])
             return -1;
     }
 
+    Telemetry::start(&app);
     int err = app.exec();
 
     // Give worker tasks time to properly exit. Fixes PendingQuitTask

@@ -1327,6 +1327,38 @@ Flickable {
                 }
 
                 CheckBox {
+                    id: telemetryEnabledCheck
+                    width: parent.width
+                    text: qsTr("Send anonymous daily usage telemetry")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.telemetryEnabled
+                    onCheckedChanged: {
+                        StreamingPreferences.telemetryEnabled = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Sends the Selene version, operating system, and CPU architecture at most once per day. No device identifier is sent.")
+                }
+
+                CheckBox {
+                    id: crashReportingEnabledCheck
+                    width: parent.width
+                    text: qsTr("Send anonymous crash reports")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.crashReportingEnabled
+                    onCheckedChanged: {
+                        StreamingPreferences.crashReportingEnabled = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Reports an unclean exit on the next launch. Memory dumps, logs, paths, and device identifiers are never uploaded.")
+                }
+
+                CheckBox {
                     visible: SystemProperties.hasDiscordIntegration
                     id: discordPresenceCheck
                     width: parent.width

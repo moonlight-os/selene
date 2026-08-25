@@ -3,6 +3,9 @@ name: Build - Windows and macOS
 permissions:
   contents: read
 
+env:
+  TELEMETRY_URL: ${{ vars.TELEMETRY_URL }}
+
 on:
   workflow_call:
     inputs:
