@@ -678,6 +678,10 @@ QStringList PanelModel::currentItems() const
             items.append(QStringLiteral("Save settings to this USB stick"));
         }
         if (m_TerminalAvailable) items.append(QStringLiteral("Open command line"));
+        if (m_TerminalAvailable) {
+            items.append(QStringLiteral("Software packages (graphical)"));
+            items.append(QStringLiteral("Software packages (text)"));
+        }
         items.append(QStringLiteral("Power"));
         items.append(QStringLiteral("Back"));
         return items;
@@ -1950,15 +1954,23 @@ void PanelModel::activateSelection()
     if (m_Screen == Screen::Maintenance
             && (action == "Update Moonlight OS"
                 || action == "Save settings to this USB stick"
-                || action == "Open command line")) {
+                || action == "Open command line"
+                || action == "Software packages (graphical)"
+                || action == "Software packages (text)")) {
         QJsonObject args;
         args["workflow"] = action == "Update Moonlight OS"
             ? QStringLiteral("update")
             : action == "Save settings to this USB stick"
-                ? QStringLiteral("persist") : QStringLiteral("shell");
+                ? QStringLiteral("persist")
+                : action == "Software packages (graphical)"
+                    ? QStringLiteral("packages_gui")
+                    : action == "Software packages (text)"
+                        ? QStringLiteral("packages") : QStringLiteral("shell");
         ask(QStringLiteral("system.launch"), args,
             action == "Update Moonlight OS" ? QStringLiteral("Opening system updater")
             : action == "Open command line" ? QStringLiteral("Opening command line")
+            : action.startsWith(QLatin1String("Software packages"))
+                ? QStringLiteral("Opening software packages")
                                               : QStringLiteral("Opening persistence setup"),
             QStringLiteral("The panel closes before the guided terminal opens."));
         return;

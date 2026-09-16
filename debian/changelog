@@ -1,3 +1,9 @@
+selene (6.3.0~beta4-1) trixie; urgency=medium
+
+  * Add graphical and text software package entries to the Moonlight OS panel.
+
+ -- Margot Prego <mopigames@proton.me>  Wed, 16 Sep 2026 15:51:14 +0200
+
 selene (6.3.0~beta2-1) trixie; urgency=medium
 
   * Add M6 display-topology negotiation for Helios hosts.
